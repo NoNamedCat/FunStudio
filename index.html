@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FunStudio Web IDE | WCH CH32 RISC-V & ch32fun SDK</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- JSZip for 1-Click Project Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <!-- Monaco Editor Loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
+  <style>
+    :root {
+      --bg-topbar: #323233;
+      --bg-activity: #181818;
+      --bg-sidebar: #1e1e1e;
+      --bg-editor: #1e1e1e;
+      --bg-tabs: #252526;
+      --bg-tab: #2d2d2d;
+      --bg-tab-active: #1e1e1e;
+      --bg-panel: #181818;
+      --bg-statusbar: #007acc;
+      --bg-card: #252526;
+      --bg-hover: #2a2d2e;
+      --bg-bar: #333333;
+      --border: #2d2d2d;
+      --border-focus: #007fd4;
+      
+      --text: #cccccc;
+      --text-bright: #ffffff;
+      --text-muted: #858585;
+      --accent: #007acc;
+      --accent-hover: #0098ff;
+      --accent-green: #388a34;
+      --accent-orange: #d16969;
+      --accent-yellow: #dcdcaa;
+      --accent-cyan: #4ec9b0;
+      
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-editor);
+      color: var(--text);
+      font-family: var(--font-ui);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    /* Top Application Bar */
+    .topbar {
+      height: 38px;
+      background: var(--bg-topbar);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 0.8rem;
+      z-index: 50;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: 0.02em;
+    }
+
+    .logo-icon {
+      color: var(--accent);
+      font-size: 1.15rem;
+    }
+
+    .topbar-center {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .project-pill-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 0.76rem;
+      color: var(--text-bright);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .project-pill-btn:hover {
+      border-color: var(--accent);
+      background: var(--bg-hover);
+    }
+    .project-pill-btn i { color: var(--accent); }
+
+    .chip-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 122, 204, 0.15);
+      color: var(--accent-hover);
+      border: 1px solid rgba(0, 122, 204, 0.3);
+      font-weight: 500;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-action {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      outline: none;
+    }
+
+    .btn-action.success {
+      background: #388a34;
+      color: white;
+    }
+
+    .btn-action.success:hover { background: #45a140; }
+    .btn-action.success:disabled { background: #2d5a2a; cursor: not-allowed; opacity: 0.8; }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-bright);
+    }
+
+    .select-pill {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .select-pill:focus { border-color: var(--border-focus); }
+
+    /* Main Workspace Layout */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Left Activity Bar */
+    .activity-bar {
+      width: 48px;
+      background: var(--bg-activity);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 0;
+      z-index: 10;
+    }
+
+    .activity-btn {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .activity-btn:hover { color: var(--text-bright); }
+    .activity-btn.active { color: var(--text-bright); }
+
+    .activity-btn.active::before {
+      content: '';
+      position: absolute;
+      left: -4px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: var(--accent);
+      border-radius: 0 2px 2px 0;
+    }
+
+    /* Collapsible Left Sidebar */
+    .sidebar {
+      width: 290px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: width 0.2s ease, background 0.2s;
+    }
+
+    .sidebar.collapsed { width: 0; border: none; }
+
+    .sidebar-header {
+      height: 38px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.08);
+    }
+
+    .sidebar-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .icon-action-btn {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      color: var(--text-muted);
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      font-size: 0.78rem;
+      transition: all 0.15s;
+    }
+    .icon-action-btn:hover {
+      color: var(--text-bright);
+      background: var(--bg-hover);
+    }
+
+    .sidebar-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    /* Project File Explorer List */
+    .project-info-bar {
+      padding: 8px 14px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+    }
+    .project-name-title {
+      font-weight: 600;
+      color: var(--text-bright);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tree-section-title {
+      padding: 6px 14px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tree-item {
+      padding: 6px 14px 6px 24px;
+      font-size: 0.82rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.1s;
+      position: relative;
+    }
+
+    .tree-item-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tree-item:hover { background: var(--bg-hover); }
+    .tree-item.active { background: var(--bg-hover); color: var(--text-bright); font-weight: 600; }
+    .tree-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--accent);
+    }
+
+    .tree-item i { font-size: 0.85rem; width: 14px; text-align: center; }
+    .icon-c { color: #519aba; }
+    .icon-ld { color: #e37933; }
+    .icon-h { color: #ba8baf; }
+    .icon-s { color: #4ec9b0; }
+
+    .file-delete-btn {
+      opacity: 0;
+      color: var(--text-muted);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-size: 0.72rem;
+      transition: all 0.15s;
+    }
+    .tree-item:hover .file-delete-btn { opacity: 0.7; }
+    .file-delete-btn:hover { opacity: 1; color: var(--accent-orange); background: rgba(209, 105, 105, 0.15); }
+
+    /* Examples Catalogue View */
+    .examples-filter-bar {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .search-input-box {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 0.76rem;
+      color: var(--text-bright);
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .search-input-box:focus { border-color: var(--accent); }
+
+    .tree-folder { margin-top: 2px; }
+    .tree-folder-title {
+      padding: 6px 14px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.1s;
+    }
+    .tree-folder-title:hover { color: var(--text-bright); }
+    .tree-folder-title .folder-icon { color: #dcb67a; font-size: 0.82rem; }
+    .tree-folder-title .fa-chevron-down { font-size: 0.65rem; transition: transform 0.15s ease; }
+    .tree-folder.collapsed .tree-folder-children { display: none; }
+    .tree-folder.collapsed .fa-chevron-down { transform: rotate(-90deg); }
+
+    .example-item-card {
+      padding: 7px 14px 7px 28px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .example-item-card:hover { background: var(--bg-hover); }
+    .example-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .example-card-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .example-card-desc {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+      line-height: 1.3;
+    }
+    .example-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+    .chip-pills {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .chip-pill {
+      font-size: 0.62rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .btn-example-clone {
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 3px;
+      background: rgba(0, 122, 204, 0.2);
+      color: var(--accent-hover);
+      border: 1px solid rgba(0, 122, 204, 0.4);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-example-clone:hover {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* Projects View */
+    .projects-toolbar {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+    .btn-create-proj {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-create-proj:hover { background: var(--accent-hover); }
+
+    .project-card {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-sidebar);
+      transition: background 0.15s;
+      cursor: pointer;
+    }
+    .project-card:hover { background: var(--bg-hover); }
+    .project-card.active {
+      border-left: 3px solid var(--accent);
+      background: rgba(0, 122, 204, 0.08);
+    }
+    .proj-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .proj-card-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-bright);
+    }
+    .proj-card-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .proj-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .proj-action-btn {
+      padding: 3px 8px;
+      font-size: 0.7rem;
+      border-radius: 3px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .proj-action-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-bright);
+    }
+    .proj-action-btn.danger:hover {
+      color: var(--accent-orange);
+      border-color: var(--accent-orange);
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-box {
+      width: 90%;
+      max-width: 440px;
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+      color: var(--text-bright);
+      font-size: 0.9rem;
+    }
+    .modal-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      background: rgba(0,0,0,0.1);
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .form-input, .form-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      color: var(--text-bright);
+      font-size: 0.82rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--accent); }
+
+    /* Editor and Center Workspace */
+    .editor-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-editor);
+    }
+
+    .editor-tabs {
+      height: 35px;
+      background: var(--bg-tabs);
+      display: flex;
+      align-items: flex-end;
+      padding: 0 4px;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      height: 31px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-tab);
+      color: var(--text-muted);
+      border-radius: 4px 4px 0 0;
+      margin-right: 2px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-bottom: none;
+      transition: all 0.15s;
+    }
+
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      background: var(--bg-tab-active);
+      color: var(--text-bright);
+      border-color: var(--border);
+    }
+
+    .tab-close {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    .tab-close:hover { color: var(--text-bright); background: rgba(255,255,255,0.1); }
+
+    .editor-breadcrumbs {
+      height: 24px;
+      background: var(--bg-editor);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .monaco-host {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Bottom Panel */
+    .bottom-panel {
+      height: 210px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+
+    .panel-tabs {
+      height: 32px;
+      background: var(--bg-tabs);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-tabs-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 100%;
+    }
+
+    .panel-tab {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .panel-tab:hover { color: var(--text); }
+    .panel-tab.active {
+      color: var(--text-bright);
+      border-bottom-color: var(--accent);
+    }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .panel-view { height: 100%; }
+
+    /* Terminal logs */
+    .log-line {
+      display: flex;
+      gap: 12px;
+      padding: 2px 0;
+      line-height: 1.4;
+    }
+    .log-time { color: var(--text-muted); font-size: 0.75rem; }
+    .log-step { color: var(--accent); font-weight: 600; min-width: 48px; }
+    .log-msg { color: var(--text); flex: 1; }
+    .log-msg.error { color: var(--accent-orange); }
+    .log-msg.warn { color: var(--accent-yellow); }
+    .log-msg.success { color: var(--accent-cyan); font-weight: 600; }
+
+    /* Memory Footprint Panel */
+    .mem-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .mem-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+    }
+    .mem-title {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin-bottom: 6px;
+    }
+    .mem-bar-bg {
+      height: 6px;
+      background: var(--bg-bar);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .mem-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #4ec9b0);
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+    .mem-details {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* Section Table */
+    .section-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    .section-table th, .section-table td {
+      padding: 5px 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-table th { color: var(--text-muted); font-weight: 600; }
+
+    /* Status Bar */
+    .statusbar {
+      height: 24px;
+      background: var(--bg-statusbar);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      font-size: 0.72rem;
+      color: white;
+      z-index: 20;
+    }
+
+    .statusbar-left, .statusbar-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Progress bar */
+    .compiler-progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: transparent;
+      z-index: 100;
+    }
+    .compiler-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      transition: width 0.25s ease;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Compilation progress bar -->
+  <div class="compiler-progress">
+    <div id="buildProgress" class="compiler-progress-bar"></div>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-container">
+        <i class="fa-solid fa-microchip logo-icon"></i>
+        <span data-i18n="app_title">FunStudio</span>
+      </div>
+
+      <!-- Active Project Pill Trigger -->
+      <button class="project-pill-btn" id="topbarProjectBtn" title="Switch or Manage Projects">
+        <i class="fa-solid fa-folder-open"></i>
+        <span id="topbarProjectName">Blank Project</span>
+        <i class="fa-solid fa-caret-down" style="font-size: 0.65rem; margin-left: 2px;"></i>
+      </button>
+    </div>
+
+    <div class="topbar-center">
+      <div class="chip-badge" id="topChipBadge"><i class="fa-solid fa-bolt"></i> CH32V003</div>
+      <div class="chip-badge" id="topArchBadge"><i class="fa-solid fa-code"></i> RV32EC</div>
+      <div class="chip-badge" id="topOptBadge"><i class="fa-solid fa-gauge-high"></i> -Os</div>
+      
+      <!-- Themes Gallery Dropdown -->
+      <select id="themeSelect" class="select-pill" title="IDE Theme Gallery">
+        <optgroup label="🌙 Dark & Cyberpunk Themes">
+          <option value="vs-dark">VS Code Dark+</option>
+          <option value="one-dark">One Dark Pro</option>
+          <option value="dracula">Dracula Official</option>
+          <option value="tokyo-night">Tokyo Night Cyber</option>
+          <option value="synthwave">Synthwave '84 Neon</option>
+          <option value="nord">Nord Arctic Dark</option>
+          <option value="catppuccin-mocha">Catppuccin Mocha</option>
+          <option value="gruvbox-dark">Gruvbox Retro Dark</option>
+          <option value="monokai">Monokai Pro</option>
+          <option value="solarized-dark">Solarized Dark</option>
+        </optgroup>
+        <optgroup label="☀️ Clean Light Themes">
+          <option value="vs-light">VS Code Light+</option>
+          <option value="github-light">GitHub Light</option>
+          <option value="catppuccin-latte">Catppuccin Latte</option>
+          <option value="solarized-light">Solarized Light</option>
+          <option value="nord-light">Nord Snow Light</option>
+        </optgroup>
+      </select>
+
+      <!-- Language Selector -->
+      <select id="langSelect" class="select-pill" title="Interface Language">
+        <option value="es">🌐 Español</option>
+        <option value="en">🌐 English (US)</option>
+        <option value="fr">🌐 Français</option>
+        <option value="de">🌐 Deutsch</option>
+      </select>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="compileBtn" class="btn-action success">
+        <i class="fa-solid fa-play"></i>
+        <span data-i18n="btn_compile">Compile (WASM)</span>
+      </button>
+
+      <button id="cleanBtn" class="btn-secondary" data-i18n-title="btn_clean" title="Clean">
+        <i class="fa-solid fa-broom"></i>
+      </button>
+
+      <button id="downloadBtn" class="btn-secondary" data-i18n-title="btn_downloads" title="Downloads">
+        <i class="fa-solid fa-download"></i>
+        <span data-i18n="btn_downloads">Artifacts</span>
+        <i class="fa-solid fa-chevron-down" style="font-size: 0.65rem;"></i>
+      </button>
+
+      <button id="toggleSidebarBtn" class="btn-secondary" data-i18n-title="btn_toggle_sidebar" title="Toggle Sidebar">
+        <i class="fa-solid fa-table-columns"></i>
+      </button>
+      <button id="togglePanelBtn" class="btn-secondary" data-i18n-title="btn_toggle_panel" title="Toggle Panel">
+        <i class="fa-solid fa-terminal"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Workspace -->
+  <div class="workspace">
+    
+    <!-- Activity Bar -->
+    <div class="activity-bar">
+      <div class="activity-btn active" data-sidebar="explorer" data-i18n-title="explorer_title" title="Project Files">
+        <i class="fa-regular fa-folder"></i>
+      </div>
+      <div class="activity-btn" data-sidebar="examples" data-i18n-title="examples_title" title="ch32fun Examples Catalogue">
+        <i class="fa-solid fa-book-bookmark"></i>
+      </div>
+      <div class="activity-btn" data-sidebar="projects" data-i18n-title="projects_title" title="Saved Projects">
+        <i class="fa-solid fa-box-archive"></i>
+      </div>
+      <div class="activity-btn" data-sidebar="hardware" data-i18n-title="hardware_title" title="Target Microcontroller">
+        <i class="fa-solid fa-microchip"></i>
+      </div>
+      <div class="activity-btn" data-sidebar="compiler" data-i18n-title="compiler_title" title="Compiler Configuration">
+        <i class="fa-solid fa-sliders"></i>
+      </div>
+      <div class="activity-btn" data-sidebar="help" data-i18n-title="help_title" title="About FunStudio">
+        <i class="fa-regular fa-circle-question"></i>
+      </div>
+    </div>
+
+    <!-- Collapsible Sidebar -->
+    <div class="sidebar" id="sidebar">
+      
+      <!-- View 1: Project Explorer (ONLY FILES OF ACTIVE PROJECT) -->
+      <div id="view-explorer" class="sidebar-view">
+        <div class="sidebar-header">
+          <span data-i18n="explorer_title">Project Files</span>
+          <div class="sidebar-header-actions">
+            <button class="icon-action-btn" id="btnNewFile" data-i18n-title="btn_new_file" title="New File">
+              <i class="fa-solid fa-file-circle-plus"></i>
+            </button>
+            <button class="icon-action-btn" id="btnExportZip" data-i18n-title="btn_export_zip" title="Export Project ZIP">
+              <i class="fa-solid fa-file-zipper"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="project-info-bar">
+          <div class="project-name-title">
+            <i class="fa-solid fa-microchip" style="color: var(--accent);"></i>
+            <span id="explorerProjectName">Blank Project</span>
+          </div>
+          <span id="explorerMcuBadge" class="chip-pill">CH32V003</span>
+        </div>
+
+        <div class="sidebar-content">
+          <div class="tree-section-title"><span data-i18n="section_project_files">PROJECT FILES</span></div>
+          <div id="projectFilesContainer">
+            <!-- Dynamically populated with ONLY the active project's files -->
+          </div>
+        </div>
+      </div>
+
+      <!-- View 2: Examples Catalogue (DEDICATED SECTION) -->
+      <div id="view-examples" class="sidebar-view" style="display: none;">
+        <div class="sidebar-header">
+          <span data-i18n="examples_title">Examples Catalogue</span>
+          <span id="examplesTotalCount" class="chip-pill">25+</span>
+        </div>
+
+        <div class="examples-filter-bar">
+          <input type="text" id="exampleSearchInput" class="search-input-box" placeholder="Search examples (ADC, PWM, USB...)" data-i18n-placeholder="search_examples_placeholder" />
+          <select id="examplesMcuFilter" class="search-input-box" style="cursor: pointer;">
+            <option value="all">⚡ All Microcontrollers</option>
+            <option value="ch32v003">CH32V003 (RV32EC)</option>
+            <option value="ch32v006">CH32V006 (RV32EC+Zmmul)</option>
+            <option value="ch32x035">CH32X035 (USB-PD / OneWire)</option>
+            <option value="ch32v103">CH32V103 (USB FS)</option>
+            <option value="ch32v203">CH32V203 (USB / CAN)</option>
+            <option value="ch32v307">CH32V307 (GbE / 480M USB / DAC)</option>
+            <option value="ch32l103">CH32L103 (Low Power)</option>
+          </select>
+        </div>
+
+        <div class="sidebar-content" id="examplesListContainer">
+          <!-- Dynamically populated with categorized accordion examples -->
+        </div>
+      </div>
+
+      <!-- View 3: Saved Projects (BROWSER LOCALSTORAGE MANAGER) -->
+      <div id="view-projects" class="sidebar-view" style="display: none;">
+        <div class="sidebar-header">
+          <span data-i18n="projects_title">Saved Projects</span>
+        </div>
+
+        <div class="projects-toolbar">
+          <button class="btn-create-proj" id="btnOpenNewProjectModal">
+            <i class="fa-solid fa-plus"></i>
+            <span data-i18n="btn_new_project">New Project</span>
+          </button>
+        </div>
+
+        <div class="sidebar-content" id="savedProjectsListContainer">
+          <!-- Dynamically populated with saved project cards -->
+        </div>
+      </div>
+
+      <!-- View 4: Hardware Profile -->
+      <div id="view-hardware" class="sidebar-view" style="display: none;">
+        <div class="sidebar-header">
+          <span data-i18n="hardware_title">Target Microcontroller</span>
+        </div>
+        <div class="sidebar-content" style="padding: 14px;">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" data-i18n="label_board">Board / Chip Target:</label>
+            <select id="mcuSelect" class="form-select">
+              <optgroup label="⚡ WCH CH32 Series (ch32fun)">
+                <option value="ch32v003" selected>WCH CH32V003 (RV32EC - 48MHz)</option>
+                <option value="ch32v006">WCH CH32V006 (RV32EC+Zmmul - 48MHz)</option>
+                <option value="ch32x035">WCH CH32X035 (RV32IMAC - USB-PD)</option>
+                <option value="ch32v103">WCH CH32V103 (RV32IMAC - 72MHz)</option>
+                <option value="ch32v203">WCH CH32V203 (RV32IMAC - USB/CAN)</option>
+                <option value="ch32v307">WCH CH32V307 (RV32IMAFC - GbE/FPU)</option>
+                <option value="ch32l103">WCH CH32L103 (RV32IMAC - Low Power)</option>
+                <option value="ch582">WCH CH582 (RV32IMAC - BLE 5.x)</option>
+              </optgroup>
+              <optgroup label="🌐 Other RISC-V Targets">
+                <option value="esp32c3">Espressif ESP32-C3 (RV32IMC - 160MHz)</option>
+                <option value="rp2350">Raspberry Pi RP2350 (Hazard3)</option>
+                <option value="gd32vf103">GigaDevice GD32VF103 (RV32IMAC)</option>
+                <option value="generic">Generic RISC-V 32-bit Baremetal</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div style="font-size: 0.78rem; line-height: 1.8; color: var(--text);">
+            <div><strong style="color: var(--text-bright);"><span data-i18n="spec_core">Core</span>:</strong> <span id="specCore">QingKe V2A RV32EC</span></div>
+            <div><strong style="color: var(--text-bright);"><span data-i18n="spec_clock">Clock</span>:</strong> <span id="specClock">48 MHz</span></div>
+            <div><strong style="color: var(--text-bright);"><span data-i18n="spec_sram">SRAM</span>:</strong> <span id="specSram">2 KB</span></div>
+            <div><strong style="color: var(--text-bright);"><span data-i18n="spec_flash">Flash</span>:</strong> <span id="specFlash">16 KB</span></div>
+            <div><strong style="color: var(--text-bright);"><span data-i18n="spec_periph">Peripherals</span>:</strong> <span id="specPeriph">GPIO, 1xUSART, 1xSPI, 1xI2C, 1xOPA</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- View 5: Compiler Flags -->
+      <div id="view-compiler" class="sidebar-view" style="display: none;">
+        <div class="sidebar-header">
+          <span data-i18n="compiler_title">Compiler Configuration</span>
+        </div>
+        <div class="sidebar-content" style="padding: 14px;">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" data-i18n="label_arch">ISA Architecture (-march):</label>
+            <select id="archSelect" class="form-select">
+              <option value="rv32ec" selected>rv32ec (CH32V003 Base)</option>
+              <option value="rv32imac">rv32imac (Standard WCH V203/X035)</option>
+              <option value="rv32imafc">rv32imafc (CH32V307 Hardware FPU)</option>
+              <option value="rv32imc">rv32imc (ESP32-C3 / RP2350)</option>
+              <option value="rv32i">rv32i (Base 32-bit Integer)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" data-i18n="label_opt">Optimization Level (-O):</label>
+            <select id="optSelect" class="form-select">
+              <option value="-Os" selected>-Os (Optimize for Minimal Code Size)</option>
+              <option value="-O2">-O2 (Speed & Size Balanced)</option>
+              <option value="-O3">-O3 (Aggressive Speed Optimization)</option>
+              <option value="-O0">-O0 (No Optimization, Clean Debug)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- View 6: Help / About -->
+      <div id="view-help" class="sidebar-view" style="display: none;">
+        <div class="sidebar-header">
+          <span data-i18n="help_title">About FunStudio</span>
+        </div>
+        <div class="sidebar-content" style="padding: 14px; font-size: 0.8rem; line-height: 1.6;">
+          <p style="margin-bottom: 10px;" data-i18n="help_text_1">
+            FunStudio is a specialized online IDE for WCH CH32 RISC-V microcontrollers and the ch32fun SDK.
+          </p>
+          <p style="margin-bottom: 14px;" data-i18n="help_text_2">
+            100% Client-Side: Real GNU GCC 15.2.0 and GNU Binutils 2.44 run directly inside browser WebAssembly with zero server dependency.
+          </p>
+          <strong data-i18n="help_shortcuts">Shortcuts:</strong>
+          <ul style="padding-left: 20px; margin-top: 6px; color: var(--text-muted);">
+            <li><kbd style="background: var(--bg-card); padding: 1px 4px; border-radius: 3px;">Ctrl</kbd> + <kbd style="background: var(--bg-card); padding: 1px 4px; border-radius: 3px;">Enter</kbd>: Compile Firmware</li>
+            <li><kbd style="background: var(--bg-card); padding: 1px 4px; border-radius: 3px;">Ctrl</kbd> + <kbd style="background: var(--bg-card); padding: 1px 4px; border-radius: 3px;">S</kbd>: Save Project</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Center Workspace (Editor + Panels) -->
+    <div class="editor-container">
+      
+      <!-- Editor Tabs -->
+      <div class="editor-tabs" id="editorTabs">
+        <!-- Dynamically rendered tabs for open files -->
+      </div>
+
+      <!-- Breadcrumbs -->
+      <div class="editor-breadcrumbs">
+        <i class="fa-solid fa-folder-tree"></i>
+        <span id="breadcrumbProject">Project</span>
+        <span>/</span>
+        <span id="breadcrumbCurrentFile" style="color: var(--text-bright); font-weight: 500;">main.c</span>
+      </div>
+
+      <!-- Monaco Editor Host -->
+      <div id="monaco-host" class="monaco-host"></div>
+
+      <!-- Bottom Panel (Terminal, Problems, Disassembly, Memory Footprint) -->
+      <div class="bottom-panel" id="bottomPanel">
+        <div class="panel-tabs">
+          <div class="panel-tabs-left">
+            <div class="panel-tab active" data-target="panel-terminal">
+              <i class="fa-solid fa-terminal"></i>
+              <span data-i18n="tab_terminal">GCC Terminal</span>
+            </div>
+            <div class="panel-tab" data-target="panel-problems">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span data-i18n="tab_problems">Problems</span>
+              <span class="chip-pill" id="problemCountBadge" style="display: none;">0</span>
+            </div>
+            <div class="panel-tab" data-target="panel-disasm">
+              <i class="fa-solid fa-microchip"></i>
+              <span data-i18n="tab_disasm">Disassembly (.s)</span>
+            </div>
+            <div class="panel-tab" data-target="panel-memory">
+              <i class="fa-solid fa-chart-pie"></i>
+              <span data-i18n="tab_memory">Memory Footprint</span>
+            </div>
+            <div class="panel-tab" data-target="panel-hex">
+              <i class="fa-solid fa-file-code"></i>
+              <span data-i18n="tab_hex">Intel HEX (.hex)</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button id="clearTerminalBtn" class="btn-secondary" style="padding: 2px 6px;" title="Clear Output">
+              <i class="fa-solid fa-ban"></i>
+            </button>
+            <button id="closePanelBtn" class="btn-secondary" style="padding: 2px 6px;" title="Close Panel">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-content">
+          <!-- Terminal View -->
+          <div class="panel-view" id="panel-terminal">
+            <div id="terminalOutput">
+              <div class="log-line">
+                <span class="log-time">[00:00:00]</span>
+                <span class="log-step">[SYSTEM]</span>
+                <span class="log-msg" data-i18n="terminal_ready">FunStudio Ready. Press Compile (Ctrl+Enter) to build firmware in WebAssembly.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Problems View -->
+          <div class="panel-view" id="panel-problems" style="display: none;">
+            <div id="problemsList" style="color: var(--text-muted); font-size: 0.8rem;">
+              <span data-i18n="no_problems">No problems detected in current source file.</span>
+            </div>
+          </div>
+
+          <!-- Disassembly View -->
+          <div class="panel-view" id="panel-disasm" style="display: none;">
+            <pre id="disassemblyOutput" style="font-size: 0.78rem; line-height: 1.4; color: var(--text);"></pre>
+          </div>
+
+          <!-- Memory Analysis View -->
+          <div class="panel-view" id="panel-memory" style="display: none;">
+            <div class="mem-grid">
+              <div class="mem-card">
+                <div class="mem-title">
+                  <span><i class="fa-solid fa-hard-drive"></i> <span data-i18n="mem_flash_title">Flash ROM Utilized</span></span>
+                  <span id="flashPercentText">0.0%</span>
+                </div>
+                <div class="mem-bar-bg">
+                  <div class="mem-bar-fill" id="flashBar"></div>
+                </div>
+                <div class="mem-details">
+                  <span id="flashUsedBytes">0 Bytes used</span>
+                  <span id="flashTotalBytes">of 16 KB</span>
+                </div>
+              </div>
+
+              <div class="mem-card">
+                <div class="mem-title">
+                  <span><i class="fa-solid fa-memory"></i> <span data-i18n="mem_sram_title">SRAM Memory Utilized</span></span>
+                  <span id="sramPercentText">0.0%</span>
+                </div>
+                <div class="mem-bar-bg">
+                  <div class="mem-bar-fill" id="sramBar" style="background: linear-gradient(90deg, #388a34, #6a9955);"></div>
+                </div>
+                <div class="mem-details">
+                  <span id="sramUsedBytes">0 Bytes used</span>
+                  <span id="sramTotalBytes">of 2 KB</span>
+                </div>
+              </div>
+            </div>
+
+            <table class="section-table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_section">ELF Section</th>
+                  <th data-i18n="th_desc">Description</th>
+                  <th data-i18n="th_size">Size (Bytes)</th>
+                  <th data-i18n="th_dest">Memory Region</th>
+                </tr>
+              </thead>
+              <tbody id="sectionsTableBody">
+                <tr>
+                  <td><code>.text</code></td>
+                  <td>Executable machine instructions</td>
+                  <td id="secTextSize">-</td>
+                  <td>FLASH (0x00000000)</td>
+                </tr>
+                <tr>
+                  <td><code>.rodata</code></td>
+                  <td>Constants and read-only strings</td>
+                  <td id="secRodataSize">-</td>
+                  <td>FLASH</td>
+                </tr>
+                <tr>
+                  <td><code>.data</code></td>
+                  <td>Initialized global and static variables</td>
+                  <td id="secDataSize">-</td>
+                  <td>RAM (0x20000000)</td>
+                </tr>
+                <tr>
+                  <td><code>.bss</code></td>
+                  <td>Zero-initialized uninitialized data</td>
+                  <td id="secBssSize">-</td>
+                  <td>RAM</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- HEX View -->
+          <div class="panel-view" id="panel-hex" style="display: none;">
+            <pre id="hexDumpOutput" style="font-size: 0.78rem; color: var(--accent);"></pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Status Bar (Bottom) -->
+  <div class="statusbar">
+    <div class="statusbar-left">
+      <div class="status-item"><i class="fa-solid fa-code-branch"></i> <span id="statusProjectName">Blank Project</span></div>
+      <div class="status-item" id="statusState"><i class="fa-solid fa-circle-check"></i> <span data-i18n="status_ready">GCC 15.2.0 Ready</span></div>
+      <div class="status-item"><i class="fa-solid fa-microchip"></i> <span id="statusTarget">CH32V003 (rv32ec)</span></div>
+      <div class="status-item" id="statusTime" style="display: none;"><i class="fa-solid fa-stopwatch"></i> <span id="statusTimeVal">0.65s</span></div>
+    </div>
+
+    <div class="statusbar-right">
+      <div class="status-item"><span id="cursorPos">Ln 1, Col 1</span></div>
+      <div class="status-item"><span>UTF-8</span></div>
+      <div class="status-item"><span>C (RISC-V)</span></div>
+      <div class="status-item" style="background: rgba(0,0,0,0.2); padding: 0 8px; border-radius: 2px;">
+        <i class="fa-solid fa-cloud-arrow-down" style="color: #4ec9b0;"></i> <span data-i18n="badge_in_browser">100% In-Browser</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download Artifacts Dropdown Menu -->
+  <div id="downloadModal" style="display: none; position: fixed; top: 45px; right: 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.35); z-index: 1000; padding: 6px 0; min-width: 230px;">
+    <div class="tree-item" id="dlOptionZip"><i class="fa-solid fa-file-zipper" style="color: var(--accent-yellow);"></i> <span data-i18n="dl_zip">Download Project ZIP (.ZIP)</span></div>
+    <div class="tree-item" id="dlOptionElf"><i class="fa-solid fa-file-binary" style="color: #4ec9b0;"></i> <span data-i18n="dl_elf">Download Firmware (.ELF)</span></div>
+    <div class="tree-item" id="dlOptionHex"><i class="fa-solid fa-file-code" style="color: #519aba;"></i> <span data-i18n="dl_hex">Download Intel HEX (.HEX)</span></div>
+    <div class="tree-item" id="dlOptionBin"><i class="fa-solid fa-file" style="color: #e37933;"></i> <span data-i18n="dl_bin">Download Raw Binary (.BIN)</span></div>
+    <div class="tree-item" id="dlOptionAsm"><i class="fa-solid fa-file-lines" style="color: #ba8baf;"></i> <span data-i18n="dl_asm">Download Assembly (.S)</span></div>
+  </div>
+
+  <!-- Modal: Create New Project -->
+  <div class="modal-backdrop" id="newProjectModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span><i class="fa-solid fa-folder-plus" style="color: var(--accent); margin-right: 6px;"></i> <span data-i18n="btn_new_project">New Project</span></span>
+        <button class="icon-action-btn" id="closeNewProjectModalBtn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Project Name:</label>
+          <input type="text" id="newProjectNameInput" class="form-input" placeholder="e.g. My CH32 Project" value="My CH32 Project" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Target Microcontroller:</label>
+          <select id="newProjectMcuSelect" class="form-select">
+            <option value="ch32v003" selected>WCH CH32V003 (RV32EC - 48MHz)</option>
+            <option value="ch32v006">WCH CH32V006 (RV32EC+Zmmul - 48MHz)</option>
+            <option value="ch32x035">WCH CH32X035 (RV32IMAC - USB-PD)</option>
+            <option value="ch32v103">WCH CH32V103 (RV32IMAC - 72MHz)</option>
+            <option value="ch32v203">WCH CH32V203 (RV32IMAC - USB/CAN)</option>
+            <option value="ch32v307">WCH CH32V307 (RV32IMAFC - GbE/FPU)</option>
+            <option value="ch32l103">WCH CH32L103 (RV32IMAC - Low Power)</option>
+            <option value="ch582">WCH CH582 (RV32IMAC - BLE 5.x)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Starter Template:</label>
+          <select id="newProjectTemplateSelect" class="form-select">
+            <option value="blank" selected>Blank Project Template (main.c)</option>
+            <option value="blink.c">LED Blink Example</option>
+            <option value="uartdemo.c">UART Serial Terminal Demo</option>
+            <option value="systick_timer.c">SysTick Periodic Interrupt</option>
+            <option value="rv003usb_gamepad.c">rv003usb USB Gamepad</option>
+            <option value="adc_polled.c">ADC Analog Input Polling</option>
+            <option value="i2c_oled.c">I2C SSD1306 Graphic OLED</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancelNewProjectModalBtn">Cancel</button>
+        <button class="btn-action success" id="confirmCreateProjectBtn">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create New File -->
+  <div class="modal-backdrop" id="newFileModal">
+    <div class="modal-box" style="max-width: 360px;">
+      <div class="modal-header">
+        <span><i class="fa-solid fa-file-circle-plus" style="color: var(--accent); margin-right: 6px;"></i> <span data-i18n="btn_new_file">New File</span></span>
+        <button class="icon-action-btn" id="closeNewFileModalBtn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">File Name (with extension, e.g. sensors.h):</label>
+          <input type="text" id="newFileNameInput" class="form-input" placeholder="e.g. config.h, helper.c" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancelNewFileModalBtn">Cancel</button>
+        <button class="btn-action success" id="confirmCreateFileBtn">Add File</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./src/app.js" type="module"></script>
+</body>
+</html>

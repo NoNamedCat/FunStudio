@@ -1,0 +1,393 @@
+// Internationalization (i18n) Engine for FunStudio Web IDE
+// Supported languages: English (en), Spanish (es), French (fr), German (de)
+
+export const TRANSLATIONS = {
+  en: {
+    app_title: "FunStudio",
+    project_label: "microcontroller-firmware",
+    btn_compile: "Compile (WASM)",
+    btn_compiling: "Compiling...",
+    btn_clean: "Clean",
+    btn_downloads: "Artifacts",
+    btn_toggle_sidebar: "Toggle Sidebar",
+    btn_toggle_panel: "Toggle Panel",
+    btn_new_project: "New Project",
+    btn_open_project: "Projects",
+    btn_new_file: "New File",
+    btn_save_project: "Save",
+    btn_export_zip: "Export ZIP",
+    
+    // Sidebar Views
+    explorer_title: "Project Explorer",
+    examples_title: "Examples Catalogue",
+    projects_title: "Saved Projects",
+    hardware_title: "Target Microcontroller",
+    compiler_title: "Compiler Configuration",
+    help_title: "About FunStudio",
+
+    section_project_files: "PROJECT FILES",
+    section_current_project: "ACTIVE PROJECT",
+    blank_template_label: "main.c",
+    search_examples_placeholder: "Search 25+ examples (PWM, ADC, USB, CAN...)",
+    filter_all_mcus: "All Microcontrollers",
+    clone_as_project: "Create Project",
+    open_example: "Open",
+    view_example: "Preview",
+    active_badge: "ACTIVE",
+
+    // Hardware Specs
+    label_board: "Board / Chip Target:",
+    label_specs: "Hardware Specifications:",
+    spec_core: "Core",
+    spec_clock: "Clock Speed",
+    spec_sram: "SRAM Memory",
+    spec_flash: "Flash ROM",
+    spec_periph: "Peripherals",
+    
+    // Compiler
+    label_arch: "ISA Architecture (-march):",
+    label_opt: "Optimization Level (-O):",
+    label_std: "Language Standard (-std):",
+    
+    help_text_1: "FunStudio is a specialized online IDE for WCH CH32 RISC-V microcontrollers and the ch32fun SDK.",
+    help_text_2: "100% Client-Side: Real GNU GCC 15.2.0 and GNU Binutils 2.44 run directly inside browser WebAssembly with zero server dependency.",
+    help_shortcuts: "Keyboard Shortcuts:",
+    
+    // Panel Tabs
+    tab_terminal: "GCC Terminal",
+    tab_problems: "Problems",
+    tab_disasm: "Disassembly (.s)",
+    tab_memory: "Memory Footprint",
+    tab_hex: "Intel HEX (.hex)",
+    
+    // Terminal & Problems
+    terminal_ready: "FunStudio Ready. Press Compile (Ctrl+Enter) to build firmware in WebAssembly.",
+    no_problems: "No problems detected in current source file.",
+    problems_found: "problem(s) found",
+    
+    // Memory
+    mem_flash_title: "Flash ROM Utilized",
+    mem_sram_title: "SRAM Memory Utilized",
+    mem_used_label: "Bytes used",
+    mem_total_label: "of",
+    th_section: "ELF Section",
+    th_desc: "Description",
+    th_size: "Size (Bytes)",
+    th_dest: "Memory Region",
+    
+    // Status Bar
+    status_ready: "GCC 15.2.0 Ready",
+    status_compiling: "Compiling GCC...",
+    status_success: "Build Succeeded",
+    status_error: "Build Failed",
+    badge_in_browser: "100% In-Browser",
+    
+    // Downloads
+    dl_elf: "Download Firmware (.ELF)",
+    dl_hex: "Download Intel HEX (.HEX)",
+    dl_bin: "Download Raw Binary (.BIN)",
+    dl_asm: "Download Assembly (.S)",
+    dl_zip: "Download Project ZIP (.ZIP)",
+    dl_alert_empty: "Compile firmware first before downloading.",
+  },
+
+  es: {
+    app_title: "FunStudio",
+    project_label: "microcontroller-firmware",
+    btn_compile: "Compilar (WASM)",
+    btn_compiling: "Compilando...",
+    btn_clean: "Limpiar",
+    btn_downloads: "Artefactos",
+    btn_toggle_sidebar: "Alternar Barra Lateral",
+    btn_toggle_panel: "Alternar Panel Inferior",
+    btn_new_project: "Nuevo Proyecto",
+    btn_open_project: "Proyectos",
+    btn_new_file: "Nuevo Archivo",
+    btn_save_project: "Guardar",
+    btn_export_zip: "Exportar ZIP",
+    
+    // Sidebar Views
+    explorer_title: "Explorador de Proyecto",
+    examples_title: "Catálogo de Ejemplos",
+    projects_title: "Proyectos Guardados",
+    hardware_title: "Microcontrolador Objetivo",
+    compiler_title: "Configuración del Compilador",
+    help_title: "Acerca de FunStudio",
+
+    section_project_files: "ARCHIVOS DEL PROYECTO",
+    section_current_project: "PROYECTO ACTIVO",
+    blank_template_label: "main.c",
+    search_examples_placeholder: "Buscar entre 25+ ejemplos (PWM, ADC, USB, CAN...)",
+    filter_all_mcus: "Todos los Microcontroladores",
+    clone_as_project: "Crear Proyecto",
+    open_example: "Abrir",
+    view_example: "Ver",
+    active_badge: "ACTIVO",
+
+    // Hardware Specs
+    label_board: "Microcontrolador / Placa:",
+    label_specs: "Especificaciones del Chip:",
+    spec_core: "Núcleo",
+    spec_clock: "Frecuencia",
+    spec_sram: "Memoria SRAM",
+    spec_flash: "Memoria Flash",
+    spec_periph: "Periféricos",
+    
+    // Compiler
+    label_arch: "Arquitectura ISA (-march):",
+    label_opt: "Nivel de Optimización (-O):",
+    label_std: "Estándar de Lenguaje (-std):",
+    
+    help_text_1: "FunStudio es un IDE web especializado para microcontroladores RISC-V WCH CH32 y el SDK ch32fun.",
+    help_text_2: "100% en el Navegador: GNU GCC 15.2.0 y GNU Binutils 2.44 corren directamente en WebAssembly sin servidores externos.",
+    help_shortcuts: "Atajos de Teclado:",
+    
+    // Panel Tabs
+    tab_terminal: "Terminal GCC",
+    tab_problems: "Problemas",
+    tab_disasm: "Desensamblado (.s)",
+    tab_memory: "Uso de Memoria",
+    tab_hex: "Intel HEX (.hex)",
+    
+    // Terminal & Problems
+    terminal_ready: "FunStudio Listo. Presiona Compilar (Ctrl+Enter) para construir el firmware en WebAssembly.",
+    no_problems: "No se detectaron problemas en el código fuente actual.",
+    problems_found: "problema(s) detectado(s)",
+    
+    // Memory
+    mem_flash_title: "Memoria Flash ROM Utilizada",
+    mem_sram_title: "Memoria SRAM Utilizada",
+    mem_used_label: "Bytes usados",
+    mem_total_label: "de",
+    th_section: "Sección ELF",
+    th_desc: "Descripción",
+    th_size: "Tamaño (Bytes)",
+    th_dest: "Región de Memoria",
+    
+    // Status Bar
+    status_ready: "GCC 15.2.0 Listo",
+    status_compiling: "Compilando GCC...",
+    status_success: "Compilación Exitosa",
+    status_error: "Error de Compilación",
+    badge_in_browser: "100% en el Navegador",
+    
+    // Downloads
+    dl_elf: "Descargar Firmware (.ELF)",
+    dl_hex: "Descargar Intel HEX (.HEX)",
+    dl_bin: "Descargar Binario Raw (.BIN)",
+    dl_asm: "Descargar Ensamblador (.S)",
+    dl_zip: "Descargar Proyecto en ZIP (.ZIP)",
+    dl_alert_empty: "Compila el firmware antes de descargar artefactos.",
+  },
+
+  fr: {
+    app_title: "FunStudio",
+    project_label: "microcontroller-firmware",
+    btn_compile: "Compiler (WASM)",
+    btn_compiling: "Compilation...",
+    btn_clean: "Effacer",
+    btn_downloads: "Téléchargements",
+    btn_toggle_sidebar: "Basculer la barre latérale",
+    btn_toggle_panel: "Basculer le panneau",
+    btn_new_project: "Nouveau Projet",
+    btn_open_project: "Projets",
+    btn_new_file: "Nouveau Fichier",
+    btn_save_project: "Enregistrer",
+    btn_export_zip: "Exporter ZIP",
+    
+    explorer_title: "Explorateur de Projet",
+    examples_title: "Catalogue d'Exemples",
+    projects_title: "Projets Enregistrés",
+    hardware_title: "Microcontrôleur Cible",
+    compiler_title: "Options du Compilateur",
+    help_title: "À propos de FunStudio",
+
+    section_project_files: "FICHIERS DU PROJET",
+    section_current_project: "PROJET ACTIF",
+    blank_template_label: "main.c",
+    search_examples_placeholder: "Rechercher des exemples...",
+    filter_all_mcus: "Tous les microcontrôleurs",
+    clone_as_project: "Créer un Projet",
+    open_example: "Ouvrir",
+    view_example: "Aperçu",
+    active_badge: "ACTIF",
+
+    label_board: "Microcontrôleur / Carte :",
+    label_specs: "Spécifications Matérielles :",
+    spec_core: "Cœur",
+    spec_clock: "Fréquence",
+    spec_sram: "Mémoire SRAM",
+    spec_flash: "Mémoire Flash",
+    spec_periph: "Périphériques",
+    
+    label_arch: "Architecture ISA (-march) :",
+    label_opt: "Niveau d'Optimisation (-O) :",
+    label_std: "Standard de Langage (-std) :",
+    
+    help_text_1: "FunStudio est un IDE Web dédié aux microcontrôleurs WCH CH32 RISC-V et au SDK ch32fun.",
+    help_text_2: "100% Côté Client : GCC 15 et GNU Binutils s'exécutent entièrement en WebAssembly.",
+    help_shortcuts: "Raccourcis Clavier :",
+    
+    tab_terminal: "Terminal GCC",
+    tab_problems: "Problèmes",
+    tab_disasm: "Désassemblage (.s)",
+    tab_memory: "Mémoire",
+    tab_hex: "Intel HEX (.hex)",
+    
+    terminal_ready: "FunStudio Prêt. Appuyez sur Compiler pour créer le firmware.",
+    no_problems: "Aucun problème détecté.",
+    problems_found: "problème(s) détecté(s)",
+    
+    mem_flash_title: "Mémoire Flash Utilisée",
+    mem_sram_title: "Mémoire SRAM Utilisée",
+    mem_used_label: "Octets utilisés",
+    mem_total_label: "sur",
+    th_section: "Section ELF",
+    th_desc: "Description",
+    th_size: "Taille (Octets)",
+    th_dest: "Région Mémoire",
+    
+    status_ready: "GCC 15.2.0 Prêt",
+    status_compiling: "Compilation...",
+    status_success: "Succès",
+    status_error: "Échec",
+    badge_in_browser: "100% dans le Navigateur",
+    
+    dl_elf: "Télécharger Firmware (.ELF)",
+    dl_hex: "Télécharger Intel HEX (.HEX)",
+    dl_bin: "Télécharger Binaire (.BIN)",
+    dl_asm: "Télécharger Assembleur (.S)",
+    dl_zip: "Télécharger Projet ZIP (.ZIP)",
+    dl_alert_empty: "Veuillez d'abord compiler le firmware.",
+  },
+
+  de: {
+    app_title: "FunStudio",
+    project_label: "microcontroller-firmware",
+    btn_compile: "Kompilieren (WASM)",
+    btn_compiling: "Kompiliert...",
+    btn_clean: "Bereinigen",
+    btn_downloads: "Downloads",
+    btn_toggle_sidebar: "Seitenleiste umschalten",
+    btn_toggle_panel: "Bedienfeld umschalten",
+    btn_new_project: "Neues Projekt",
+    btn_open_project: "Projekte",
+    btn_new_file: "Neue Datei",
+    btn_save_project: "Speichern",
+    btn_export_zip: "ZIP exportieren",
+    
+    explorer_title: "Projekt-Explorer",
+    examples_title: "Beispielkatalog",
+    projects_title: "Gespeicherte Projekte",
+    hardware_title: "Ziel-Mikrocontroller",
+    compiler_title: "Compiler-Optionen",
+    help_title: "Über FunStudio",
+
+    section_project_files: "PROJEKTDATEIEN",
+    section_current_project: "AKTIVES PROJEKT",
+    blank_template_label: "main.c",
+    search_examples_placeholder: "Beispiele durchsuchen...",
+    filter_all_mcus: "Alle Mikrocontroller",
+    clone_as_project: "Projekt erstellen",
+    open_example: "Öffnen",
+    view_example: "Vorschau",
+    active_badge: "AKTIV",
+
+    label_board: "Board / Chip-Ziel:",
+    label_specs: "Hardwarespezifikationen:",
+    spec_core: "Kern",
+    spec_clock: "Taktfrequenz",
+    spec_sram: "SRAM-Speicher",
+    spec_flash: "Flash-Speicher",
+    spec_periph: "Peripherie",
+    
+    label_arch: "ISA-Architektur (-march):",
+    label_opt: "Optimierungsstufe (-O):",
+    label_std: "Sprachstandard (-std):",
+    
+    help_text_1: "FunStudio ist eine spezialisierte Web-IDE für WCH CH32 RISC-V Mikrocontroller und das ch32fun SDK.",
+    help_text_2: "100% Client-Side: GNU GCC 15.2.0 und Binutils laufen direkt im WebAssembly Ihres Browsers.",
+    help_shortcuts: "Tastaturkürzel:",
+    
+    tab_terminal: "GCC-Terminal",
+    tab_problems: "Probleme",
+    tab_disasm: "Disassemblierung (.s)",
+    tab_memory: "Speicherbelegung",
+    tab_hex: "Intel HEX (.hex)",
+    
+    terminal_ready: "FunStudio Bereit. Drücken Sie Kompilieren, um die Firmware zu bauen.",
+    no_problems: "Keine Probleme erkannt.",
+    problems_found: "Problem(e) gefunden",
+    
+    mem_flash_title: "Flash-Speicher Belegt",
+    mem_sram_title: "SRAM-Speicher Belegt",
+    mem_used_label: "Bytes belegt",
+    mem_total_label: "von",
+    th_section: "ELF-Abschnitt",
+    th_desc: "Beschreibung",
+    th_size: "Größe (Bytes)",
+    th_dest: "Speicherregion",
+    
+    status_ready: "GCC 15.2.0 Bereit",
+    status_compiling: "Kompiliert...",
+    status_success: "Erfolgreich",
+    status_error: "Fehlgeschlagen",
+    badge_in_browser: "100% im Browser",
+    
+    dl_elf: "Firmware herunterladen (.ELF)",
+    dl_hex: "Intel HEX herunterladen (.HEX)",
+    dl_bin: "Rohbinärdatei (.BIN)",
+    dl_asm: "Assembler herunterladen (.S)",
+    dl_zip: "Projekt-ZIP herunterladen (.ZIP)",
+    dl_alert_empty: "Bitte kompilieren Sie die Firmware zuerst.",
+  },
+};
+
+let currentLang = localStorage.getItem("funstudio_lang") || "es";
+
+export function getLanguage() {
+  return currentLang;
+}
+
+export function setLanguage(lang) {
+  if (TRANSLATIONS[lang]) {
+    currentLang = lang;
+    localStorage.setItem("funstudio_lang", lang);
+    applyTranslations();
+  }
+}
+
+export function t(key) {
+  const dict = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+  return dict[key] || TRANSLATIONS.en[key] || key;
+}
+
+export function applyTranslations() {
+  const dict = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    if (dict[key]) {
+      el.textContent = dict[key];
+    }
+  });
+
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    const key = el.getAttribute("data-i18n-title");
+    if (dict[key]) {
+      el.setAttribute("title", dict[key]);
+    }
+  });
+
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    if (dict[key]) {
+      el.setAttribute("placeholder", dict[key]);
+    }
+  });
+
+  const langSelect = document.getElementById("langSelect");
+  if (langSelect && langSelect.value !== currentLang) {
+    langSelect.value = currentLang;
+  }
+}

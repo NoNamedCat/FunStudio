@@ -1,0 +1,27 @@
+{
+  "name": "riscv-web-compiler",
+  "version": "1.0.0",
+  "description": "RISC-V GCC & GNU Binutils WebAssembly In-Browser Compiler",
+  "main": "src/app.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "node server.js"
+  },
+  "keywords": [
+    "riscv",
+    "gcc",
+    "wasm",
+    "webassembly",
+    "compiler",
+    "microcontroller",
+    "embedded"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
