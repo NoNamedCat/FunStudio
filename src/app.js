@@ -156,7 +156,7 @@ async function initMonaco() {
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         const curProj = projectManager.getActiveProject();
         projectManager.saveActiveProjectFiles(curProj.files, curProj.mcu);
-        addLog(0, `💾 Proyecto "${curProj.name}" guardado en el almacenamiento del navegador.`, "success");
+        addLog(0, `💾 Project "${curProj.name}" saved to browser storage.`, "success");
       });
 
       resolve();
@@ -256,7 +256,7 @@ function renderProjectExplorer() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const fname = btn.getAttribute("data-delete-file");
-      if (confirm(`¿Eliminar el archivo "${fname}" del proyecto?`)) {
+      if (confirm(`Delete file "${fname}" from project?`)) {
         try {
           projectManager.deleteFileFromActiveProject(fname);
           if (activeFile === fname) switchToFile("main.c");
@@ -414,7 +414,7 @@ function renderExamplesCatalogue() {
       const ex = EXAMPLES_CATALOGUE.find((x) => x.id === exId);
       if (ex && editor) {
         editor.setValue(ex.code);
-        addLog(0, `📖 Visualizando ejemplo "${ex.name}". Puedes crear un proyecto nuevo con él usando "Crear Proyecto".`, "info");
+        addLog(0, `📖 Previewing example "${ex.name}". You can create a new project from it using "Create Project".`, "info");
       }
     });
   });
@@ -430,7 +430,7 @@ function renderExamplesCatalogue() {
         document.querySelector('.activity-btn[data-sidebar="explorer"]').click();
         renderProjectExplorer();
         switchToFile("main.c");
-        addLog(0, `✨ Proyecto "${newProj.name}" creado con éxito a partir del ejemplo "${exId}".`, "success");
+        addLog(0, `✨ Project "${newProj.name}" created from example "${exId}".`, "success");
       } catch (err) {
         alert(err.message);
       }
@@ -508,7 +508,7 @@ function renderSavedProjectsList() {
       e.stopPropagation();
       const id = btn.getAttribute("data-id");
       const proj = projectManager.getProject(id);
-      if (confirm(`¿Estás seguro de eliminar el proyecto "${proj.name}"? Esta acción no se puede deshacer.`)) {
+      if (confirm(`Are you sure you want to delete project "${proj.name}"? This action cannot be undone.`)) {
         try {
           projectManager.deleteProject(id);
           renderSavedProjectsList();
@@ -553,7 +553,7 @@ confirmCreateProjectBtn.addEventListener("click", () => {
   document.querySelector('.activity-btn[data-sidebar="explorer"]').click();
   renderProjectExplorer();
   switchToFile("main.c");
-  addLog(0, `✨ Proyecto "${newProj.name}" creado exitosamente (${mcu.toUpperCase()}).`, "success");
+  addLog(0, `✨ Project "${newProj.name}" created successfully (${mcu.toUpperCase()}).`, "success");
 });
 
 // New File Modal
@@ -728,8 +728,8 @@ async function compileFirmware() {
   document.querySelector('.panel-tab[data-target="panel-terminal"]').click();
 
   const profile = MCU_PROFILES[curProj.mcu] || MCU_PROFILES.ch32v003;
-  addLog(0, `=== FunStudio Web IDE | Compilador GNU GCC 15.2.0 (WebAssembly) ===`, "info");
-  addLog(0, `Proyecto: "${curProj.name}" | Target: ${curProj.mcu.toUpperCase()} | ISA: ${profile.arch} | Opt: ${optSelect.value}`, "info");
+  addLog(0, `=== FunStudio Web IDE | GNU GCC 15.2.0 Compiler (WebAssembly) ===`, "info");
+  addLog(0, `Project: "${curProj.name}" | Target: ${curProj.mcu.toUpperCase()} | ISA: ${profile.arch} | Opt: ${optSelect.value}`, "info");
 
   currentWorker = new Worker(new URL("./compiler-worker.js", import.meta.url), { type: "module" });
 
@@ -811,7 +811,7 @@ cleanBtn.addEventListener("click", () => {
   document.getElementById("disassemblyOutput").textContent = "";
   document.getElementById("hexDumpOutput").textContent = "";
   statusTime.style.display = "none";
-  addLog(0, "Archivos compilados y registros de compilación limpiados.", "info");
+  addLog(0, "Build artifacts and compilation logs cleared.", "info");
 });
 
 // 12. Diagnostics & Monaco Markers

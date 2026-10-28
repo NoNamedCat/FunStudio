@@ -15,8 +15,8 @@
 const IS_NODE = typeof process !== "undefined" && process.versions && process.versions.node;
 const WASM_BASE = IS_NODE
   ? "./public/wasm-toolchain/"
-  : (typeof import.meta !== "undefined" && import.meta.url
-      ? new URL("../public/wasm-toolchain/", import.meta.url).href
+  : (typeof location !== "undefined" && location.href
+      ? new URL("../public/wasm-toolchain/", location.href).href
       : "./public/wasm-toolchain/");
 
 // Toolchain module factories
@@ -478,8 +478,8 @@ self.onmessage = async (e) => {
     }
     const currentAbi = abi || (march.startsWith("rv32e") ? "ilp32e" : "ilp32");
 
-    log(1, `Iniciando compilación en vivo con GNU GCC 15.2.0 real (${targetMcu} | Arch: ${march} | ABI: ${currentAbi})...`);
-    progress(5, "Inicializando entorno WebAssembly y librerías C de Newlib...");
+    log(1, `Starting live baremetal compilation with GNU GCC 15.2.0 (${targetMcu} | Arch: ${march} | ABI: ${currentAbi})...`);
+    progress(5, "Initializing WebAssembly environment and Newlib C headers...");
 
     await preloadEnvironment();
 
@@ -501,8 +501,8 @@ self.onmessage = async (e) => {
     // Stage 1: Compile SDK Sources On-The-Fly (NO PRECOMPILATION)
     // =========================================================================
     if (isCh32 && cachedCh32funC) {
-      progress(15, "[1/7] cc1: Compilando ch32fun.c en vivo desde código fuente...");
-      log(1, "Compilando SDK ch32fun.c con GNU GCC 15 (vectores de interrupción, SystemInit, UART printf)...");
+      progress(15, "[1/7] cc1: Compiling ch32fun.c live from source code...");
+      log(1, "Compiling SDK ch32fun.c with GNU GCC 15 (interrupt vectors, SystemInit, UART printf)...");
 
       let funErrors = [];
       const cc1Fun = await cc1Factory({
@@ -527,13 +527,13 @@ self.onmessage = async (e) => {
       } catch (_) {}
 
       if (funErrors.length > 0) {
-        throw new Error(`Error compilando ch32fun.c:\n${funErrors.join("\n")}`);
+        throw new Error(`Error compiling ch32fun.c:\n${funErrors.join("\n")}`);
       }
 
       const funAsm = cc1Fun.FS.readFile("/ch32fun.s", { encoding: "utf8" });
 
       // Assemble ch32fun.s -> ch32fun.o
-      progress(25, "[2/7] riscv-as: Ensamblando ch32fun.o...");
+      progress(25, "[2/7] riscv-as: Assembling ch32fun.o...");
       const asFun = await asFactory({
         noInitialRun: true,
         locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-as.wasm" : p}`,
@@ -542,13 +542,13 @@ self.onmessage = async (e) => {
       asFun.callMain(["-march=" + march, "-mabi=" + currentAbi, "-o", "/ch32fun.o", "/ch32fun.s"]);
       const ch32funObj = asFun.FS.readFile("/ch32fun.o");
       objectFilesToLink.push({ name: "/ch32fun.o", data: ch32funObj });
-      log(1, `✓ ch32fun.c compilado y ensamblado en vivo: ${ch32funObj.length} bytes.`);
+      log(1, `✓ ch32fun.c compiled and assembled: ${ch32funObj.length} bytes.`);
     }
 
     // Optional: Compile rv003usb on-the-fly if project uses rv003usb
     if (isRv003usb && cachedRv003usbC && cachedRv003usbS) {
-      progress(35, "[3/7] cc1/as: Compilando biblioteca USB por software rv003usb...");
-      log(1, "Compilando módulo USB software rv003usb.c y rv003usb.S con usb_config.h del proyecto...");
+      progress(35, "[3/7] cc1/as: Compiling software USB library rv003usb...");
+      log(1, "Compiling software USB modules rv003usb.c and rv003usb.S with project usb_config.h...");
 
       // 1. Compile rv003usb.c
       const cc1RvC = await cc1Factory({
@@ -599,14 +599,14 @@ self.onmessage = async (e) => {
       asRvS.FS.writeFile("/rv003usb_s.s", cc1RvS.FS.readFile("/rv003usb_s.s"));
       asRvS.callMain(["-march=" + march, "-mabi=" + currentAbi, "-o", "/rv003usb_s.o", "/rv003usb_s.s"]);
       objectFilesToLink.push({ name: "/rv003usb_s.o", data: asRvS.FS.readFile("/rv003usb_s.o") });
-      log(1, "✓ rv003usb.c y rv003usb.S compilados en vivo.");
+      log(1, "✓ rv003usb.c and rv003usb.S compiled successfully.");
     }
 
     // =========================================================================
     // Stage 2: Compile User Code (main.c) On-The-Fly
     // =========================================================================
-    progress(45, "[4/7] cc1: Compilando código de usuario con GCC 15.2.0...");
-    log(2, "Compilando código principal main.c...");
+    progress(45, "[4/7] cc1: Compiling user code with GCC 15.2.0...");
+    log(2, "Compiling main.c...");
 
     let cc1Errors = [];
     let cc1Warnings = [];
@@ -647,7 +647,7 @@ self.onmessage = async (e) => {
 
     const mainAsmText = cc1Mod.FS.readFile("/main.s", { encoding: "utf8" });
     const asmLineCount = mainAsmText.split("\n").length;
-    log(2, `✓ Ensamblador generado para main.c: ${asmLineCount} líneas de instrucciones.`);
+    log(2, `✓ Assembly generated for main.c: ${asmLineCount} instructions.`);
 
     // Assemble main.s -> main.o
     const asMod = await asFactory({
@@ -658,18 +658,18 @@ self.onmessage = async (e) => {
     asMod.callMain(["-march=" + march, "-mabi=" + currentAbi, "-o", "/main.o", "/main.s"]);
     const mainObjBytes = asMod.FS.readFile("/main.o");
     objectFilesToLink.push({ name: "/main.o", data: mainObjBytes });
-    log(2, `✓ riscv-as ensambló main.o: ${mainObjBytes.length} bytes.`);
+    log(2, `✓ riscv-as assembled main.o: ${mainObjBytes.length} bytes.`);
 
     // =========================================================================
     // Stage 3: Link Real Objects with GNU Linker (riscv-ld)
     // =========================================================================
-    progress(60, "[5/7] riscv-ld: Enlazando ejecutable baremetal ELF...");
-    log(3, `Enlazando ${objectFilesToLink.length} objetos compilados en vivo según el mapa de memoria oficial de ${targetMcu}...`);
+    progress(60, "[5/7] riscv-ld: Linking baremetal ELF executable...");
+    log(3, `Linking ${objectFilesToLink.length} objects for target ${targetMcu}...`);
 
     // Preprocess official ch32fun.ld using cc1 with TARGET_MCU macros (genuine ch32fun.mk rule)
     let finalLinkerScript = linkerScript || cachedCh32funLd;
     if (finalLinkerScript && (finalLinkerScript.includes("#if") || finalLinkerScript.includes("#include"))) {
-      log(3, `Preprocesando ch32fun.ld con GCC cc1 (TARGET_MCU=${mcuConfig.targetMcu}, TARGET_MCU_LD=${mcuConfig.ld}, MCU_PACKAGE=${mcuConfig.pkg}, TARGET_MCU_MEMORY_SPLIT=${mcuConfig.split})...`);
+      log(3, `Preprocessing ch32fun.ld with GCC cc1 (TARGET_MCU=${mcuConfig.targetMcu}, TARGET_MCU_LD=${mcuConfig.ld}, MCU_PACKAGE=${mcuConfig.pkg}, TARGET_MCU_MEMORY_SPLIT=${mcuConfig.split})...`);
       const cc1Ld = await cc1Factory({
         noInitialRun: true,
         locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "cc1.wasm" : p}`,
@@ -732,9 +732,9 @@ self.onmessage = async (e) => {
     let elfBytes = null;
     try {
       elfBytes = ldMod.FS.readFile("/main.elf");
-      log(3, `✓ riscv-ld enlazó ejecutable ELF real: ${elfBytes.length} bytes.`);
+      log(3, `✓ riscv-ld linked ELF executable: ${elfBytes.length} bytes.`);
     } catch (ldReadErr) {
-      throw new Error(ldErrors.join("\n") || `riscv-ld fallo: ${ldReadErr.message}`);
+      throw new Error(ldErrors.join("\n") || `riscv-ld failed: ${ldReadErr.message}`);
     }
 
     let mapText = "";
@@ -745,7 +745,7 @@ self.onmessage = async (e) => {
     // =========================================================================
     // Stage 4: GNU objdump (Real Baremetal Disassembly)
     // =========================================================================
-    progress(75, "[6/7] riscv-objdump: Generando desensamblado con direcciones físicas...");
+    progress(75, "[6/7] riscv-objdump: Generating disassembly with physical addresses...");
     let disasmLines = [];
     const odMod = await objdumpFactory({
       noInitialRun: true,
@@ -759,12 +759,12 @@ self.onmessage = async (e) => {
     } catch (_) {}
 
     const realDisassembly = disasmLines.join("\n");
-    log(4, `✓ riscv-objdump desensambló ${disasmLines.length} líneas de código máquina.`);
+    log(4, `✓ riscv-objdump disassembled ${disasmLines.length} lines of machine code.`);
 
     // =========================================================================
     // Stage 5: GNU size (Accurate Flash / SRAM Memory Profiling)
     // =========================================================================
-    progress(85, "[7/7] riscv-size: Calculando uso de memoria Flash y SRAM...");
+    progress(85, "[7/7] riscv-size: Calculating Flash and SRAM memory usage...");
     let sizeOutput = "";
     const szMod = await sizeFactory({
       noInitialRun: true,
@@ -819,8 +819,8 @@ self.onmessage = async (e) => {
     }
 
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-    log(6, `✓ Compilación 100% completada con GNU GCC 15 y Binutils 2.44 en ${elapsed}s!`, "success");
-    progress(100, "Compilación terminada!");
+    log(6, `✓ Build completed with GNU GCC 15 and Binutils 2.44 in ${elapsed}s!`, "success");
+    progress(100, "Build completed!");
 
     self.postMessage({
       type: "success",
@@ -838,7 +838,7 @@ self.onmessage = async (e) => {
     });
 
   } catch (err) {
-    log(0, `Error durante la compilación: ${err.message}`, "error");
+    log(0, `Compilation error: ${err.message}`, "error");
     self.postMessage({
       type: "error",
       error: err.message,

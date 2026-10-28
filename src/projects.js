@@ -151,7 +151,7 @@ export class ProjectManager {
 
   deleteProject(id) {
     if (this.projects.length <= 1) {
-      throw new Error("No puedes eliminar el único proyecto existente.");
+      throw new Error("Cannot delete the only existing project.");
     }
     this.projects = this.projects.filter((p) => p.id !== id);
     if (this.activeProjectId === id) {
@@ -165,7 +165,7 @@ export class ProjectManager {
     const proj = this.getActiveProject();
     if (!proj) return;
     if (proj.files[filename] !== undefined) {
-      throw new Error(`El archivo "${filename}" ya existe en este proyecto.`);
+      throw new Error(`File "${filename}" already exists in this project.`);
     }
     proj.files[filename] = content;
     proj.updatedAt = Date.now();
@@ -176,7 +176,7 @@ export class ProjectManager {
     const proj = this.getActiveProject();
     if (!proj) return;
     if (filename === "main.c") {
-      throw new Error("No se puede eliminar el archivo principal 'main.c'.");
+      throw new Error("Cannot delete the primary 'main.c' file.");
     }
     delete proj.files[filename];
     proj.updatedAt = Date.now();
