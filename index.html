@@ -48,7 +48,29 @@
       --font-mono: 'Fira Code', 'Cascadia Code', Consolas, monospace;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    }
+
+    /* Custom Scrollbars for dark IDE theme */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.38);
+    }
     body {
       background-color: var(--bg-editor);
       color: var(--text);
@@ -250,13 +272,24 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      height: 100%;
       transition: width 0.2s ease, background 0.2s;
     }
 
     .sidebar.collapsed { width: 0; border: none; }
 
+    .sidebar-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
     .sidebar-header {
       height: 38px;
+      flex-shrink: 0;
       padding: 0 14px;
       display: flex;
       align-items: center;
@@ -297,12 +330,22 @@
 
     .sidebar-content {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 8px 0;
+    }
+
+    #examplesListContainer {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     /* Project File Explorer List */
     .project-info-bar {
+      flex-shrink: 0;
       padding: 8px 14px;
       background: var(--bg-card);
       border-bottom: 1px solid var(--border);
@@ -390,6 +433,7 @@
 
     /* Examples Catalogue View */
     .examples-filter-bar {
+      flex-shrink: 0;
       padding: 10px 14px;
       border-bottom: 1px solid var(--border);
       background: rgba(0,0,0,0.05);
@@ -493,6 +537,7 @@
 
     /* Projects View */
     .projects-toolbar {
+      flex-shrink: 0;
       padding: 10px 14px;
       border-bottom: 1px solid var(--border);
       display: flex;
@@ -781,6 +826,230 @@
     .log-msg.error { color: var(--accent-orange); }
     .log-msg.warn { color: var(--accent-yellow); }
     .log-msg.success { color: var(--accent-cyan); font-weight: 600; }
+
+    /* Disassembly View Styling */
+    .disasm-toolbar {
+      position: sticky;
+      top: -8px;
+      z-index: 10;
+      margin: -8px -12px 10px -12px;
+      padding: 6px 12px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .disasm-search-box {
+      position: relative;
+      flex: 1;
+      min-width: 180px;
+      max-width: 320px;
+      display: flex;
+      align-items: center;
+    }
+
+    .disasm-search-icon {
+      position: absolute;
+      left: 8px;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      pointer-events: none;
+    }
+
+    .disasm-filter-input {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px 4px 26px;
+      font-size: 0.75rem;
+      color: var(--text-bright);
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .disasm-filter-input:focus { border-color: var(--accent); }
+
+    .disasm-fn-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+      cursor: pointer;
+      max-width: 220px;
+    }
+    .disasm-fn-select:focus { border-color: var(--accent); }
+
+    .disasm-stats {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      padding: 2px 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+
+    .disasm-actions {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .disasm-container {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+
+    .asm-section-header {
+      padding: 6px 10px;
+      margin: 14px 0 6px 0;
+      background: rgba(0, 122, 204, 0.12);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 4px 4px 0;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent-hover);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: 0.03em;
+    }
+
+    .asm-sym-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      margin: 12px 0 4px 0;
+      background: rgba(255, 255, 255, 0.04);
+      border-left: 3px solid #dcdcaa;
+      border-radius: 0 4px 4px 0;
+      scroll-margin-top: 40px;
+      transition: background 0.3s;
+    }
+    .asm-sym-header.asm-sym-highlight {
+      animation: disasmFlash 1.2s ease;
+    }
+    @keyframes disasmFlash {
+      0% { background: rgba(0, 122, 204, 0.45); }
+      100% { background: rgba(255, 255, 255, 0.04); }
+    }
+
+    .asm-sym-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: #dcdcaa;
+      font-size: 0.82rem;
+    }
+
+    .asm-sym-icon {
+      font-size: 0.72rem;
+      color: #dcdcaa;
+      opacity: 0.8;
+    }
+
+    .asm-sym-addr {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .asm-row {
+      display: flex;
+      align-items: baseline;
+      padding: 1px 8px 1px 12px;
+      border-radius: 3px;
+      transition: background 0.1s;
+      white-space: pre;
+    }
+    .asm-row:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .asm-addr {
+      width: 76px;
+      flex-shrink: 0;
+      color: #858585;
+      user-select: none;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+    }
+
+    .asm-hex {
+      width: 90px;
+      flex-shrink: 0;
+      color: #ce9178;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      letter-spacing: 0.02em;
+    }
+
+    .asm-inst {
+      width: 68px;
+      flex-shrink: 0;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+    .asm-inst-jump { color: #c586c0; }     /* Jumps, Branches, Returns (magenta) */
+    .asm-inst-sys { color: #e5c07b; }      /* CSR, ECALL, MRET (gold/amber) */
+    .asm-inst-mem { color: #4fc1ff; }      /* LW, SW, etc. (cyan) */
+    .asm-inst-alu { color: #569cd6; }      /* ADDI, MV, LI, etc. (blue) */
+    .asm-inst-dir { color: #858585; }      /* .word, .byte, etc. (muted) */
+
+    .asm-args {
+      flex: 1;
+      color: var(--text);
+      font-family: var(--font-mono);
+    }
+
+    .asm-reg {
+      color: #9cdcfe;
+      font-weight: 500;
+    }
+
+    .asm-num {
+      color: #b5cea8;
+    }
+
+    .asm-sym-ref {
+      color: #4ec9b0;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .asm-sym-ref:hover {
+      text-decoration: underline;
+    }
+
+    .asm-comment {
+      color: #6a9955;
+      font-style: italic;
+      margin-left: 12px;
+      font-size: 0.74rem;
+    }
+
+    .asm-ellipsis {
+      padding: 2px 14px;
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 0.72rem;
+    }
+
+    .disasm-placeholder {
+      padding: 30px 14px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+    }
 
     /* Memory Footprint Panel */
     .mem-grid {
@@ -1232,7 +1501,24 @@
 
           <!-- Disassembly View -->
           <div class="panel-view" id="panel-disasm" style="display: none;">
-            <pre id="disassemblyOutput" style="font-size: 0.78rem; line-height: 1.4; color: var(--text);"></pre>
+            <div class="disasm-toolbar">
+              <div class="disasm-search-box">
+                <i class="fa-solid fa-magnifying-glass disasm-search-icon"></i>
+                <input type="text" id="disasmSearchInput" placeholder="Filter functions, instructions (e.g. main, csrw, 0x296)..." class="disasm-filter-input" data-i18n-placeholder="search_disasm_placeholder" />
+              </div>
+              <select id="disasmFnSelect" class="disasm-fn-select">
+                <option value="" data-i18n="jump_to_fn">⚡ Jump to function...</option>
+              </select>
+              <div class="disasm-stats" id="disasmStatsBadge">0 instructions</div>
+              <div class="disasm-actions">
+                <button class="btn-secondary" id="btnCopyDisasm" title="Copy Disassembly" style="padding: 2px 8px; font-size: 0.74rem;">
+                  <i class="fa-regular fa-copy"></i> <span id="copyDisasmText" data-i18n="btn_copy_disasm">Copy</span>
+                </button>
+              </div>
+            </div>
+            <div id="disassemblyOutput" class="disasm-container">
+              <div class="disasm-placeholder" data-i18n="disasm_empty">Compile firmware to view RISC-V machine code disassembly.</div>
+            </div>
           </div>
 
           <!-- Memory Analysis View -->

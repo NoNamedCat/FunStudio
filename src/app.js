@@ -808,7 +808,7 @@ compileBtn.addEventListener("click", compileFirmware);
 cleanBtn.addEventListener("click", () => {
   terminalOutput.innerHTML = "";
   compiledArtifacts = null;
-  document.getElementById("disassemblyOutput").textContent = "";
+  resetDisassembly();
   document.getElementById("hexDumpOutput").textContent = "";
   statusTime.style.display = "none";
   addLog(0, "Build artifacts and compilation logs cleared.", "info");
@@ -884,38 +884,275 @@ window.goToLine = (line, col) => {
 };
 
 // 13. Output Renderers: Disassembly, Memory Footprint & HEX
-function renderDisassembly(rawDisasm) {
+function highlightOperands(operands) {
+  if (!operands) return "";
+  let escaped = operands.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  escaped = escaped.replace(/&lt;([a-zA-Z0-9_.]+)(?:\+0x[0-9a-fA-F]+)?&gt;/g, (m, sym) => {
+    return `<span class="asm-sym-ref" data-target="${sym}">${m}</span>`;
+  });
+  escaped = escaped.replace(/\b0x[0-9a-fA-F]+\b/g, (m) => `<span class="asm-num">${m}</span>`);
+  escaped = escaped.replace(/(?<![a-zA-Z0-9_])-?\b\d+\b/g, (m) => `<span class="asm-num">${m}</span>`);
+  const regRegex = /\b(zero|ra|sp|gp|tp|t[0-6]|s[0-9]|s1[0-1]|a[0-7]|fp|pc|mstatus|mie|mtvec|mscratch|mepc|mcause|mtval|mip)\b/g;
+  escaped = escaped.replace(regRegex, (m) => `<span class="asm-reg">${m}</span>`);
+  return escaped;
+}
+
+function getMnemonicClass(mnemonic) {
+  const m = mnemonic.toLowerCase();
+  if (/^(j|jr|jal|jalr|beq|bne|blt|bge|bltu|bgeu|bnez|beqz|bgtz|bltz|bgez|blez|ret|tail|call)$/.test(m)) {
+    return "asm-inst-jump";
+  }
+  if (/^(csrr|csrw|csrs|csrc|csrwi|csrsi|csrci|csrrw|csrrs|csrrc|ecall|ebreak|mret|wfi|fence)$/.test(m)) {
+    return "asm-inst-sys";
+  }
+  if (/^(lw|sw|lh|sh|lb|sb|lhu|lbu|c\.lw|c\.sw|c\.lwsp|c\.swsp)$/.test(m)) {
+    return "asm-inst-mem";
+  }
+  if (m.startsWith(".")) {
+    return "asm-inst-dir";
+  }
+  return "asm-inst-alu";
+}
+
+function parseDisasmLine(line) {
+  const secMatch = line.match(/^Disassembly of section\s+([^\s:]+):/i);
+  if (secMatch) return { type: "section", name: secMatch[1] };
+
+  const symMatch = line.match(/^([0-9a-f]+)\s+<([^>]+)>:/i);
+  if (symMatch) return { type: "symbol", addr: symMatch[1], name: symMatch[2] };
+
+  if (/^\s*\.\.\.\s*$/.test(line)) return { type: "ellipsis" };
+
+  const colonIdx = line.indexOf(":");
+  if (colonIdx === -1) return { type: "other", text: line };
+
+  const addrStr = line.slice(0, colonIdx).trim();
+  if (!/^[0-9a-f]+$/i.test(addrStr)) return { type: "other", text: line };
+
+  const restOfLine = line.slice(colonIdx + 1);
+  const parts = restOfLine.trim().split(/\t+|\s{2,}/);
+  if (parts.length < 1) return { type: "other", text: line };
+
+  const hex = parts[0].trim();
+  if (!/^[0-9a-f\s]+$/i.test(hex)) return { type: "other", text: line };
+
+  let mnemonic = "";
+  let operands = "";
+  let comment = "";
+
+  if (parts.length >= 2) {
+    const afterHex = restOfLine.trim().slice(hex.length).trim();
+    const spaceIdx = afterHex.search(/\s/);
+    if (spaceIdx === -1) {
+      mnemonic = afterHex;
+    } else {
+      mnemonic = afterHex.slice(0, spaceIdx);
+      operands = afterHex.slice(spaceIdx).trim();
+    }
+  }
+
+  const hashIdx = operands.indexOf("#");
+  if (hashIdx !== -1) {
+    comment = operands.slice(hashIdx);
+    operands = operands.slice(0, hashIdx).trim();
+  }
+
+  return { type: "instruction", addr: addrStr, hex, mnemonic, operands, comment };
+}
+
+function resetDisassembly() {
   const container = document.getElementById("disassemblyOutput");
-  if (!rawDisasm) {
-    container.innerHTML = `<div style="color: var(--text-muted);">${t("tab_disasm")}</div>`;
+  if (container) {
+    container.innerHTML = `<div class="disasm-placeholder">${t("disasm_empty")}</div>`;
+  }
+  const fnSelect = document.getElementById("disasmFnSelect");
+  if (fnSelect) {
+    fnSelect.innerHTML = `<option value="">${t("jump_to_fn")}</option>`;
+  }
+  const badge = document.getElementById("disasmStatsBadge");
+  if (badge) {
+    badge.textContent = `0 ${t("disasm_instr_count")}`;
+  }
+  const searchInput = document.getElementById("disasmSearchInput");
+  if (searchInput) {
+    searchInput.value = "";
+  }
+}
+
+let disasmEventsInitialized = false;
+function initDisassemblyEvents() {
+  if (disasmEventsInitialized) return;
+  disasmEventsInitialized = true;
+
+  const container = document.getElementById("disassemblyOutput");
+  const fnSelect = document.getElementById("disasmFnSelect");
+  const searchInput = document.getElementById("disasmSearchInput");
+  const copyBtn = document.getElementById("btnCopyDisasm");
+  const copyText = document.getElementById("copyDisasmText");
+
+  // Click on symbol reference to jump
+  if (container) {
+    container.addEventListener("click", (e) => {
+      const ref = e.target.closest(".asm-sym-ref");
+      if (ref) {
+        const sym = ref.getAttribute("data-target");
+        if (sym) {
+          const target = document.getElementById(`fn-${sym}`);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+            target.classList.add("asm-sym-highlight");
+            setTimeout(() => target.classList.remove("asm-sym-highlight"), 1200);
+          }
+        }
+      }
+    });
+  }
+
+  // Jump from select dropdown
+  if (fnSelect) {
+    fnSelect.addEventListener("change", (e) => {
+      const sym = e.target.value;
+      if (!sym) return;
+      const target = document.getElementById(`fn-${sym}`);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.classList.add("asm-sym-highlight");
+        setTimeout(() => target.classList.remove("asm-sym-highlight"), 1200);
+      }
+    });
+  }
+
+  // Live filter search
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      if (!container) return;
+      const rows = container.querySelectorAll(".asm-row");
+      const headers = container.querySelectorAll(".asm-sym-header");
+
+      if (!q) {
+        rows.forEach((r) => (r.style.display = ""));
+        headers.forEach((h) => (h.style.display = ""));
+        return;
+      }
+
+      rows.forEach((r) => {
+        const text = (r.getAttribute("data-search") || "").toLowerCase();
+        r.style.display = text.includes(q) ? "" : "none";
+      });
+
+      headers.forEach((h) => {
+        const sym = (h.getAttribute("data-sym") || "").toLowerCase();
+        let show = sym.includes(q);
+        if (!show) {
+          let next = h.nextElementSibling;
+          while (next && !next.classList.contains("asm-sym-header") && !next.classList.contains("asm-section-header")) {
+            if (next.classList.contains("asm-row") && next.style.display !== "none") {
+              show = true;
+              break;
+            }
+            next = next.nextElementSibling;
+          }
+        }
+        h.style.display = show ? "" : "none";
+      });
+    });
+  }
+
+  // Copy disassembly
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      if (!compiledArtifacts || !compiledArtifacts.disasm) return;
+      navigator.clipboard.writeText(compiledArtifacts.disasm).then(() => {
+        if (copyText) copyText.textContent = t("btn_copied");
+        setTimeout(() => {
+          if (copyText) copyText.textContent = t("btn_copy_disasm");
+        }, 1500);
+      });
+    });
+  }
+}
+
+function renderDisassembly(rawDisasm) {
+  initDisassemblyEvents();
+  const container = document.getElementById("disassemblyOutput");
+  const fnSelect = document.getElementById("disasmFnSelect");
+  const statsBadge = document.getElementById("disasmStatsBadge");
+
+  if (!rawDisasm || !container) {
+    resetDisassembly();
     return;
   }
 
   const lines = rawDisasm.split("\n");
-  let html = "";
-  const instrRegex = /^\s*([0-9a-f]+):\s+([0-9a-f]+)\s+([a-z0-9.]+)\s*(.*)/i;
+  const htmlParts = [];
+  const functions = [];
+  let instructionCount = 0;
+  let totalBytes = 0;
 
   lines.forEach((line) => {
-    const match = line.match(instrRegex);
-    if (match) {
-      const addr = match[1];
-      const hex = match[2];
-      const inst = match[3];
-      const args = match[4];
-      html += `
-        <div class="asm-row">
-          <span class="asm-addr">${addr}:</span>
-          <span class="asm-hex">${hex}</span>
-          <span class="asm-inst">${inst}</span>
-          <span class="asm-args">${escapeHtml(args)}</span>
+    const parsed = parseDisasmLine(line);
+
+    if (parsed.type === "section") {
+      htmlParts.push(`
+        <div class="asm-section-header">
+          <i class="fa-regular fa-folder-open"></i>
+          <span>Section ${escapeHtml(parsed.name)}</span>
+          <span class="chip-pill">Machine Code</span>
         </div>
-      `;
-    } else {
-      html += `<div style="color: var(--text-muted);">${escapeHtml(line)}</div>`;
+      `);
+    } else if (parsed.type === "symbol") {
+      functions.push(parsed.name);
+      const safeId = `fn-${escapeHtml(parsed.name)}`;
+      htmlParts.push(`
+        <div class="asm-sym-header" id="${safeId}" data-sym="${escapeHtml(parsed.name)}">
+          <div class="asm-sym-title">
+            <i class="fa-solid fa-code asm-sym-icon"></i>
+            <span class="asm-sym-name">&lt;${escapeHtml(parsed.name)}&gt;</span>
+          </div>
+          <span class="asm-sym-addr">0x${parsed.addr.padStart(8, "0")}</span>
+        </div>
+      `);
+    } else if (parsed.type === "ellipsis") {
+      htmlParts.push(`<div class="asm-ellipsis">... [zeros omitted]</div>`);
+    } else if (parsed.type === "instruction") {
+      instructionCount++;
+      const hexBytes = parsed.hex.replace(/\s+/g, "");
+      totalBytes += Math.ceil(hexBytes.length / 2);
+
+      const mnemClass = getMnemonicClass(parsed.mnemonic);
+      const argsHtml = highlightOperands(parsed.operands);
+      const commentHtml = parsed.comment ? `<span class="asm-comment">${escapeHtml(parsed.comment)}</span>` : "";
+      const searchData = escapeHtml(`${parsed.addr} ${parsed.hex} ${parsed.mnemonic} ${parsed.operands} ${parsed.comment}`);
+
+      htmlParts.push(`
+        <div class="asm-row" data-search="${searchData}">
+          <span class="asm-addr">${escapeHtml(parsed.addr)}:</span>
+          <span class="asm-hex">${escapeHtml(parsed.hex)}</span>
+          <span class="asm-inst ${mnemClass}">${escapeHtml(parsed.mnemonic)}</span>
+          <span class="asm-args">${argsHtml}${commentHtml}</span>
+        </div>
+      `);
+    } else if (parsed.text.trim()) {
+      htmlParts.push(`<div style="color: var(--text-muted); padding: 2px 12px; font-size: 0.74rem;">${escapeHtml(parsed.text)}</div>`);
     }
   });
 
-  container.innerHTML = html;
+  container.innerHTML = htmlParts.join("");
+
+  // Update stats
+  if (statsBadge) {
+    statsBadge.textContent = `${instructionCount} ${t("disasm_instr_count")} (${totalBytes} B)`;
+  }
+
+  // Populate functions dropdown
+  if (fnSelect) {
+    let opts = `<option value="">${t("jump_to_fn")}</option>`;
+    functions.forEach((fn) => {
+      opts += `<option value="${escapeHtml(fn)}">&lt;${escapeHtml(fn)}&gt;</option>`;
+    });
+    fnSelect.innerHTML = opts;
+  }
 }
 
 function renderHexDump(hexContent) {

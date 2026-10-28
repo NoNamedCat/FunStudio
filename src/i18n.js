@@ -59,6 +59,12 @@ export const TRANSLATIONS = {
     tab_disasm: "Disassembly (.s)",
     tab_memory: "Memory Footprint",
     tab_hex: "Intel HEX (.hex)",
+    search_disasm_placeholder: "Filter functions, instructions (e.g. main, csrw, 0x296)...",
+    jump_to_fn: "⚡ Jump to function...",
+    disasm_empty: "Compile firmware to view RISC-V machine code disassembly.",
+    btn_copy_disasm: "Copy",
+    btn_copied: "Copied!",
+    disasm_instr_count: "instructions",
     
     // Terminal & Problems
     terminal_ready: "FunStudio Ready. Press Compile (Ctrl+Enter) to build firmware in WebAssembly.",
@@ -148,6 +154,12 @@ export const TRANSLATIONS = {
     tab_disasm: "Desensamblado (.s)",
     tab_memory: "Uso de Memoria",
     tab_hex: "Intel HEX (.hex)",
+    search_disasm_placeholder: "Filtrar funciones, instrucciones (ej. main, csrw, 0x296)...",
+    jump_to_fn: "⚡ Ir a función...",
+    disasm_empty: "Compila el firmware para ver el desensamblado de código máquina RISC-V.",
+    btn_copy_disasm: "Copiar",
+    btn_copied: "¡Copiado!",
+    disasm_instr_count: "instrucciones",
     
     // Terminal & Problems
     terminal_ready: "FunStudio Listo. Presiona Compilar (Ctrl+Enter) para construir el firmware en WebAssembly.",
@@ -233,6 +245,12 @@ export const TRANSLATIONS = {
     tab_disasm: "Désassemblage (.s)",
     tab_memory: "Mémoire",
     tab_hex: "Intel HEX (.hex)",
+    search_disasm_placeholder: "Filtrer fonctions, instructions (ex. main, csrw, 0x296)...",
+    jump_to_fn: "⚡ Aller à la fonction...",
+    disasm_empty: "Compilez le firmware pour afficher le désassemblage RISC-V.",
+    btn_copy_disasm: "Copier",
+    btn_copied: "Copié !",
+    disasm_instr_count: "instructions",
     
     terminal_ready: "FunStudio Prêt. Appuyez sur Compiler pour créer le firmware.",
     no_problems: "Aucun problème détecté.",
@@ -314,6 +332,12 @@ export const TRANSLATIONS = {
     tab_disasm: "Disassemblierung (.s)",
     tab_memory: "Speicherbelegung",
     tab_hex: "Intel HEX (.hex)",
+    search_disasm_placeholder: "Funktionen, Befehle filtern (z.B. main, csrw, 0x296)...",
+    jump_to_fn: "⚡ Zu Funktion springen...",
+    disasm_empty: "Firmware kompilieren, um RISC-V Maschinencode anzuzeigen.",
+    btn_copy_disasm: "Kopieren",
+    btn_copied: "Kopiert!",
+    disasm_instr_count: "Befehle",
     
     terminal_ready: "FunStudio Bereit. Drücken Sie Kompilieren, um die Firmware zu bauen.",
     no_problems: "Keine Probleme erkannt.",
