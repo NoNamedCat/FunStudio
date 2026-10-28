@@ -325,6 +325,8 @@ function switchToFile(filename) {
 }
 
 // 5. Examples Catalogue: Categorized Accordion View
+const expandedCategories = new Set();
+
 function renderExamplesCatalogue() {
   const query = (exampleSearchInput ? exampleSearchInput.value : "").trim().toLowerCase();
   const filterMcu = examplesMcuFilter ? examplesMcuFilter.value : "all";
@@ -356,12 +358,15 @@ function renderExamplesCatalogue() {
 
   let html = "";
   for (const [catName, items] of Object.entries(categories)) {
+    // Only expand if there is an active search query matching items or if explicitly expanded by user
+    const isExpanded = query.length > 0 ? true : expandedCategories.has(catName);
+
     html += `
-      <div class="tree-folder">
+      <div class="tree-folder ${isExpanded ? "" : "collapsed"}" data-cat="${escapeHtml(catName)}">
         <div class="tree-folder-title">
           <i class="fa-solid fa-chevron-down"></i>
-          <i class="fa-regular fa-folder-open folder-icon"></i>
-          <span>${catName}</span>
+          <i class="fa-regular ${isExpanded ? "fa-folder-open" : "fa-folder"} folder-icon"></i>
+          <span>${escapeHtml(catName)}</span>
           <span class="chip-pill" style="margin-left: auto;">${items.length}</span>
         </div>
         <div class="tree-folder-children">
@@ -372,13 +377,13 @@ function renderExamplesCatalogue() {
               <div class="example-card-header">
                 <div class="example-card-title">
                   <i class="fa-solid fa-file-code icon-c"></i>
-                  <span>${ex.name}</span>
+                  <span>${escapeHtml(ex.name)}</span>
                 </div>
                 <button class="btn-example-clone" data-clone-id="${ex.id}" title="${t("clone_as_project")}">
                   <i class="fa-solid fa-plus"></i> ${t("clone_as_project")}
                 </button>
               </div>
-              <div class="example-card-desc">${ex.description}</div>
+              <div class="example-card-desc">${escapeHtml(ex.description)}</div>
               <div class="example-card-footer">
                 <div class="chip-pills">
                   ${ex.mcus.map((m) => `<span class="chip-pill">${m.toUpperCase()}</span>`).join("")}
@@ -394,7 +399,7 @@ function renderExamplesCatalogue() {
   }
 
   if (filtered.length === 0) {
-    html = `<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">No matching examples found for "${query}".</div>`;
+    html = `<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">No matching examples found for "${escapeHtml(query)}".</div>`;
   }
 
   examplesListContainer.innerHTML = html;
@@ -402,7 +407,19 @@ function renderExamplesCatalogue() {
   // Toggle folder collapse
   examplesListContainer.querySelectorAll(".tree-folder-title").forEach((header) => {
     header.addEventListener("click", () => {
-      header.closest(".tree-folder").classList.toggle("collapsed");
+      const folder = header.closest(".tree-folder");
+      const cat = folder.getAttribute("data-cat");
+      folder.classList.toggle("collapsed");
+      const isNowCollapsed = folder.classList.contains("collapsed");
+      if (isNowCollapsed) {
+        expandedCategories.delete(cat);
+      } else {
+        expandedCategories.add(cat);
+      }
+      const icon = header.querySelector(".folder-icon");
+      if (icon) {
+        icon.className = `fa-regular ${isNowCollapsed ? "fa-folder" : "fa-folder-open"} folder-icon`;
+      }
     });
   });
 
@@ -711,6 +728,17 @@ closePanelBtn.addEventListener("click", () => {
 async function compileFirmware() {
   if (currentWorker) {
     currentWorker.terminate();
+  }
+
+  // Clear previous compilation terminal logs and diagnostics
+  terminalOutput.innerHTML = "";
+  diagnosticsList = [];
+  applyCompilerDiagnostics();
+  if (problemsList) {
+    problemsList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.8rem;"><span data-i18n="no_problems">${t("no_problems")}</span></div>`;
+  }
+  if (problemCountBadge) {
+    problemCountBadge.style.display = "none";
   }
 
   const curProj = projectManager.getActiveProject();
