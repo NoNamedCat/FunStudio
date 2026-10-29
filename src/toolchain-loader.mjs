@@ -4,7 +4,7 @@
 // bytes in IndexedDB keyed by release tag; Node uses memory only.
 import { gunzipSync, strFromU8 } from "fflate";
 
-export const TOOLCHAIN_RELEASE = "v0.3.0";
+export const TOOLCHAIN_RELEASE = "v0.1.0";
 const RELEASE_URL =
   "https://github.com/NoNamedCat/riscv-wasm-toolchain/releases/download/" +
   TOOLCHAIN_RELEASE + "/riscv-wasm-toolchain.tar.gz";

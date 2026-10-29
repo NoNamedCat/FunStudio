@@ -1,6 +1,6 @@
 {
   "name": "riscv-web-compiler",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "RISC-V GCC & GNU Binutils WebAssembly In-Browser Compiler",
   "main": "src/app.js",
   "type": "module",
