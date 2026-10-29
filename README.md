@@ -85,6 +85,43 @@ El script `./build-riscv-wasm.sh` automatiza todo el proceso de construcción de
 
 ---
 
+## 📦 Sysroot y selección multilib
+
+El enlazado es **idéntico al de un `riscv32-unknown-elf-gcc` real**: el worker no elige librerías a mano, sino que resuelve la multilib correcta desde el sysroot y enlaza contra su `libgcc.a` + `libc.a` (newlib).
+
+### Cómo se construye el sysroot
+
+1. Una toolchain cruzada nativa (`riscv32-unknown-elf-gcc` 15.2.0 + Newlib 4.5.0) se configura con un *multilib generator*:
+   ```
+   --with-multilib-generator="rv32ec-ilp32e--;rv32imac-ilp32--;rv32imafc-ilp32f--"
+   ```
+2. `make all-target-libgcc` + `make install-target-libgcc` genera un `libgcc.a` por multilib.
+3. Newlib genera un `libc.a` por multilib.
+4. `build-riscv-wasm.sh` copia el árbol `lib/` preservando el layout multilib y emite `manifest.json` con la lista de ficheros.
+
+### Multilibs disponibles
+
+| Multilib | ISA base | libc.a | libgcc.a |
+|---|---|---|---|
+| `.` (base, rv32imc/ilp32) | rv32imc | `lib/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/libgcc.a` |
+| `rv32ec/ilp32e` | rv32ec | `lib/rv32ec/ilp32e/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/rv32ec/ilp32e/libgcc.a` |
+| `rv32imac_zaamo_zalrsc/ilp32` | rv32imac | `lib/rv32imac_zaamo_zalrsc/ilp32/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/rv32imac_zaamo_zalrsc/ilp32/libgcc.a` |
+| `rv32imafc_zicsr_zaamo_zalrsc/ilp32f` | rv32imafc | `lib/rv32imafc_zicsr_zaamo_zalrsc/ilp32f/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/rv32imafc_zicsr_zaamo_zalrsc/ilp32f/libgcc.a` |
+
+### Cómo se selecciona
+
+El worker recibe `march`/`mabi` (p. ej. `rv32imac` / `ilp32`) y aplica el **algoritmo de matching de GCC**:
+
+1. La **ABI debe ser exacta** (p. ej. `ilp32`).
+2. El **xlen debe ser exacto** (32).
+3. El **ISA de la multilib debe ser subconjunto** del ISA pedido.
+4. Se elige la candidata con **más extensiones** (score); los empates se rompen lexicográficamente.
+5. Si **ninguna** multilib coincide, el compilador **falla** (no hay fallback silencioso).
+
+La librería exacta resultante se carga del sysroot y se pasa a `riscv-ld.wasm`, de modo que los símbolos (p. ej. `__udivdi3` de `libgcc.a` o `qsort` de `libc.a`) se resuelven de la multilib seleccionada, tal como en una máquina PC.
+
+---
+
 ## 📁 Estructura del Proyecto
 
 ```

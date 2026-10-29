@@ -12,6 +12,8 @@
  * Every .o object is compiled and assembled live from SDK C/Assembly source code.
  */
 
+import { matchMultilib } from "./multilib.js";
+
 const IS_NODE = typeof process !== "undefined" && process.versions && process.versions.node;
 const WASM_BASE = IS_NODE
   ? "./public/wasm-toolchain/"
@@ -32,7 +34,8 @@ let cachedHeaders = null;
 let cachedGccHeaders = null;
 let cachedCh32funC = null;
 let cachedCh32funLd = null;
-let cachedLibgccA = null;
+let cachedSysrootManifest = null;
+const cachedSysrootBinary = {};
 let cachedRv003usbC = null;
 let cachedRv003usbS = null;
 
@@ -54,6 +57,20 @@ function progress(percent, status) {
   });
 }
 
+async function makeNodeRequire() {
+  const [fs, path, crypto] = await Promise.all([
+    import("node:fs"),
+    import("node:path"),
+    import("node:crypto"),
+  ]);
+  const mods = { fs: fs.default, path: path.default, crypto: crypto.default };
+  return (name) => {
+    const mod = name.replace(/^node:/, "");
+    if (!mods[mod]) throw new Error(`loadToolFactory: unsupported require("${name}")`);
+    return mods[mod];
+  };
+}
+
 async function loadToolFactory(jsPath, exportName) {
   let scriptText = "";
   if (IS_NODE) {
@@ -69,10 +86,14 @@ async function loadToolFactory(jsPath, exportName) {
   scriptText = scriptText.replace(/^#!.*?\n/, "");
 
   const factory = new Function(
+    "require", "__dirname", "__filename",
     scriptText +
       `\nreturn typeof ${exportName} !== 'undefined' ? ${exportName} : (typeof createModule !== 'undefined' ? createModule : null);`
-  )();
-  return factory;
+  );
+  const nodeArgs = IS_NODE
+    ? [await makeNodeRequire(), (await import("node:path")).default.dirname(jsPath), jsPath]
+    : [undefined, "", ""];
+  return factory(...nodeArgs);
 }
 
 async function fetchSdkFile(relPath) {
@@ -96,6 +117,49 @@ async function fetchSdkBinary(relPath) {
     const buf = await res.arrayBuffer();
     return new Uint8Array(buf);
   }
+}
+
+const SYSROOT_GCC_DIR = "lib/gcc/riscv32-unknown-elf/15.2.0";
+const BASE_MULTILIB = "rv32imc/ilp32";
+
+async function fetchSysrootBinary(relPath) {
+  if (cachedSysrootBinary[relPath]) return cachedSysrootBinary[relPath];
+  let data;
+  if (IS_NODE) {
+    const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
+    data = new Uint8Array(fs.readFileSync(`./public/wasm-toolchain/sysroot/${relPath}`));
+  } else {
+    const res = await fetch(`${WASM_BASE}sysroot/${relPath}`);
+    if (!res.ok) throw new Error(`Could not fetch sysroot file: ${relPath}`);
+    data = new Uint8Array(await res.arrayBuffer());
+  }
+  cachedSysrootBinary[relPath] = data;
+  return data;
+}
+
+async function ensureSysrootManifest() {
+  if (cachedSysrootManifest) return cachedSysrootManifest;
+  if (IS_NODE) {
+    const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
+    cachedSysrootManifest = JSON.parse(fs.readFileSync("./public/wasm-toolchain/manifest.json", "utf8")).sysrootFiles;
+  } else {
+    const res = await fetch(`${WASM_BASE}manifest.json`);
+    if (!res.ok) throw new Error("Could not fetch sysroot manifest.json");
+    cachedSysrootManifest = (await res.json()).sysrootFiles;
+  }
+  return cachedSysrootManifest;
+}
+
+function sysrootMultilibs() {
+  const out = [BASE_MULTILIB];
+  const prefix = `${SYSROOT_GCC_DIR}/`;
+  for (const f of cachedSysrootManifest) {
+    if (f.startsWith(prefix) && f.endsWith("/libgcc.a")) {
+      const dir = f.slice(prefix.length, -"/libgcc.a".length);
+      if (dir && !out.includes(dir)) out.push(dir);
+    }
+  }
+  return out;
 }
 
 async function preloadEnvironment() {
@@ -135,8 +199,8 @@ async function preloadEnvironment() {
   if (!cachedCh32funLd) {
     try { cachedCh32funLd = await fetchSdkFile("ch32fun.ld"); } catch (e) { console.warn(e); }
   }
-  if (!cachedLibgccA) {
-    try { cachedLibgccA = await fetchSdkBinary("libgcc.a"); } catch (e) { console.warn(e); }
+  if (!cachedSysrootManifest) {
+    try { await ensureSysrootManifest(); } catch (e) { console.warn(e); }
   }
   if (!cachedRv003usbC) {
     try { cachedRv003usbC = await fetchSdkFile("rv003usb.c"); } catch (e) { console.warn(e); }
@@ -710,10 +774,23 @@ self.onmessage = async (e) => {
       ldMod.FS.writeFile(obj.name, obj.data);
       ldArgs.push(obj.name);
     }
-    if (cachedLibgccA) {
-      ldMod.FS.writeFile("/libgcc.a", cachedLibgccA);
-      ldArgs.push("/libgcc.a");
+    // Real multilib selection — same algorithm as the native riscv32-unknown-elf-gcc driver
+    const available = sysrootMultilibs();
+    const selectedMultilib = matchMultilib(march, currentAbi, available);
+    const isBase = selectedMultilib === BASE_MULTILIB;
+    const multilibPath = isBase ? "" : `${selectedMultilib}/`;
+    const libgccRel = `${SYSROOT_GCC_DIR}/${multilibPath}libgcc.a`;
+    const libcRel = `lib/${multilibPath}libc.a`;
+    const libgccMemfs = `/sysroot/${libgccRel}`;
+    const libcMemfs = `/sysroot/${libcRel}`;
+    for (const p of [libgccMemfs, libcMemfs]) {
+      ldMod.FS.mkdirTree(p.slice(0, p.lastIndexOf("/")));
     }
+    ldMod.FS.writeFile(libgccMemfs, await fetchSysrootBinary(libgccRel));
+    ldMod.FS.writeFile(libcMemfs, await fetchSysrootBinary(libcRel));
+    ldArgs.push(libcMemfs);
+    ldArgs.push(libgccMemfs);
+    log(3, `Multilib ${selectedMultilib} selected for -march=${march} -mabi=${currentAbi}`);
     ldArgs.push("-o", "/main.elf");
 
     try {
@@ -829,10 +906,16 @@ self.onmessage = async (e) => {
     });
 
   } catch (err) {
-    log(0, `Compilation error: ${err.message}`, "error");
+    let msg;
+    try {
+      msg = err instanceof Error ? err.message : (typeof err === "object" && err !== null ? JSON.stringify(err, Object.getOwnPropertyNames(err)) : String(err));
+    } catch (_) {
+      msg = String(err);
+    }
+    log(0, `Compilation error: ${msg}`, "error");
     self.postMessage({
       type: "error",
-      error: err.message,
+      error: msg,
     });
   }
 };

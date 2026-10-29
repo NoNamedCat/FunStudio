@@ -108,7 +108,7 @@ if [ ! -f "$OPT_NATIVE/bin/$TARGET-gcc" ]; then
     --enable-languages=c,c++ --disable-bootstrap --disable-nls --disable-shared --disable-threads \
     --disable-libssp --disable-libada --disable-libquadmath --disable-libgomp --disable-libvtv \
     --disable-libstdcxx --disable-lto --with-arch="$ARCH" --with-abi="$ABI" \
-    --with-multilib-list=rv32i,rv32im,rv32imc,rv32imac MAKEINFO=missing
+    --with-multilib-generator="rv32ec-ilp32e--;rv32imac-ilp32--;rv32imafc-ilp32f--" MAKEINFO=missing
   make -j"$JOBS" all-gcc && make install-gcc
   cd "$BUILD_DIR"
 fi
@@ -202,10 +202,12 @@ mkdir -p "$SYSROOT/include" "$SYSROOT/lib" "$SYSROOT/ldscripts"
 cp -r "$OPT_NATIVE/$TARGET/include/"* "$SYSROOT/include/"
 cp -r "$OPT_NATIVE/lib/gcc/$TARGET/$GCC_VERSION/include" "$SYSROOT/include/gcc" 2>/dev/null || true
 
-# Copy target libraries (libc, libm, libgcc, crt0.o)
-find "$OPT_NATIVE/$TARGET/lib" -name "*.a" -exec cp {} "$SYSROOT/lib/" \;
-find "$OPT_NATIVE/$TARGET/lib" -name "*.o" -exec cp {} "$SYSROOT/lib/" \;
-find "$OPT_NATIVE/lib/gcc/$TARGET" -name "libgcc.a" -exec cp {} "$SYSROOT/lib/" \;
+# Copy target libraries, preserving the multilib layout
+cp -r "$OPT_NATIVE/$TARGET/lib/"* "$SYSROOT/lib/"
+rm -f "$SYSROOT/lib/libgcc.a"
+rm -rf "$SYSROOT/lib/gcc"
+mkdir -p "$SYSROOT/lib/gcc/$TARGET"
+cp -r "$OPT_NATIVE/lib/gcc/$TARGET/$GCC_VERSION" "$SYSROOT/lib/gcc/$TARGET/"
 
 # Copy default linker script
 if [ -d "$OPT_NATIVE/$TARGET/lib/ldscripts" ]; then
