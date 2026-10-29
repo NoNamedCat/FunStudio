@@ -122,25 +122,6 @@
       gap: 8px;
     }
 
-    .project-pill-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 3px 10px;
-      font-size: 0.76rem;
-      color: var(--text-bright);
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .project-pill-btn:hover {
-      border-color: var(--accent);
-      background: var(--bg-hover);
-    }
-    .project-pill-btn i { color: var(--accent); }
-
     .chip-badge {
       display: flex;
       align-items: center;
@@ -267,6 +248,7 @@
     /* Collapsible Left Sidebar */
     .sidebar {
       width: 290px;
+      flex-shrink: 0;
       background: var(--bg-sidebar);
       border-right: 1px solid var(--border);
       display: flex;
@@ -276,7 +258,33 @@
       transition: width 0.2s ease, background 0.2s;
     }
 
-    .sidebar.collapsed { width: 0; border: none; }
+    .sidebar.collapsed { width: 0 !important; min-width: 0 !important; border: none; }
+    .sidebar.collapsed + .resizer-v { display: none; }
+
+    /* Resizable split handles */
+    .resizer-v, .resizer-h {
+      flex-shrink: 0;
+      position: relative;
+      z-index: 30;
+      background: transparent;
+      transition: background 0.15s;
+    }
+    .resizer-v { width: 5px; margin: 0 -2px; cursor: col-resize; }
+    .resizer-h { height: 5px; margin: -2px 0; cursor: row-resize; }
+    .resizer-v:hover, .resizer-h:hover,
+    .resizer-v.dragging, .resizer-h.dragging { background: var(--accent); }
+    body.is-resizing, body.is-resizing * { user-select: none !important; }
+    body.is-resizing.resizing-col, body.is-resizing.resizing-col * { cursor: col-resize !important; }
+    body.is-resizing.resizing-row, body.is-resizing.resizing-row * { cursor: row-resize !important; }
+    body.is-resizing .monaco-host, body.is-resizing .sidebar { transition: none !important; pointer-events: none; }
+    .editor-container:has(#bottomPanel[style*="display: none"]) #panelResizer { display: none; }
+
+    /* Bottom panel output is selectable / copyable */
+    .panel-content, .panel-content * {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .panel-content button, .panel-content select, .panel-content .disasm-toolbar { user-select: none; -webkit-user-select: none; }
 
     .sidebar-view {
       flex: 1;
@@ -692,6 +700,7 @@
     /* Editor and Center Workspace */
     .editor-container {
       flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -759,6 +768,7 @@
 
     .monaco-host {
       flex: 1;
+      min-height: 60px;
       width: 100%;
       height: 100%;
       overflow: hidden;
@@ -767,6 +777,8 @@
     /* Bottom Panel */
     .bottom-panel {
       height: 210px;
+      flex-shrink: 0;
+      min-height: 0;
       background: var(--bg-panel);
       border-top: 1px solid var(--border);
       display: flex;
@@ -989,7 +1001,6 @@
       width: 76px;
       flex-shrink: 0;
       color: #858585;
-      user-select: none;
       font-family: var(--font-mono);
       font-size: 0.76rem;
     }
@@ -1172,12 +1183,6 @@
         <span data-i18n="app_title">FunStudio</span>
       </div>
 
-      <!-- Active Project Pill Trigger -->
-      <button class="project-pill-btn" id="topbarProjectBtn" title="Switch or Manage Projects">
-        <i class="fa-solid fa-folder-open"></i>
-        <span id="topbarProjectName">Blank Project</span>
-        <i class="fa-solid fa-caret-down" style="font-size: 0.65rem; margin-left: 2px;"></i>
-      </button>
     </div>
 
     <div class="topbar-center">
@@ -1247,14 +1252,14 @@
     
     <!-- Activity Bar -->
     <div class="activity-bar">
-      <div class="activity-btn active" data-sidebar="explorer" data-i18n-title="explorer_title" title="Project Files">
-        <i class="fa-regular fa-folder"></i>
+      <div class="activity-btn" data-sidebar="projects" data-i18n-title="projects_title" title="Project Explorer">
+        <i class="fa-solid fa-diagram-project"></i>
+      </div>
+      <div class="activity-btn active" data-sidebar="explorer" data-i18n-title="explorer_title" title="File Explorer">
+        <i class="fa-regular fa-copy"></i>
       </div>
       <div class="activity-btn" data-sidebar="examples" data-i18n-title="examples_title" title="ch32fun Examples Catalogue">
         <i class="fa-solid fa-book-bookmark"></i>
-      </div>
-      <div class="activity-btn" data-sidebar="projects" data-i18n-title="projects_title" title="Saved Projects">
-        <i class="fa-solid fa-box-archive"></i>
       </div>
       <div class="activity-btn" data-sidebar="hardware" data-i18n-title="hardware_title" title="Target Microcontroller">
         <i class="fa-solid fa-microchip"></i>
@@ -1273,7 +1278,7 @@
       <!-- View 1: Project Explorer (ONLY FILES OF ACTIVE PROJECT) -->
       <div id="view-explorer" class="sidebar-view">
         <div class="sidebar-header">
-          <span data-i18n="explorer_title">Project Files</span>
+          <span data-i18n="explorer_title">File Explorer</span>
           <div class="sidebar-header-actions">
             <button class="icon-action-btn" id="btnNewFile" data-i18n-title="btn_new_file" title="New File">
               <i class="fa-solid fa-file-circle-plus"></i>
@@ -1326,10 +1331,10 @@
         </div>
       </div>
 
-      <!-- View 3: Saved Projects (BROWSER LOCALSTORAGE MANAGER) -->
+      <!-- View 3: Project Explorer (BROWSER LOCALSTORAGE MANAGER) -->
       <div id="view-projects" class="sidebar-view" style="display: none;">
         <div class="sidebar-header">
-          <span data-i18n="projects_title">Saved Projects</span>
+          <span data-i18n="projects_title">Project Explorer</span>
         </div>
 
         <div class="projects-toolbar">
@@ -1423,6 +1428,9 @@
 
     </div>
 
+    <!-- Sidebar / Editor resize handle -->
+    <div class="resizer-v" id="sidebarResizer" title="Drag to resize"></div>
+
     <!-- Center Workspace (Editor + Panels) -->
     <div class="editor-container">
       
@@ -1441,6 +1449,9 @@
 
       <!-- Monaco Editor Host -->
       <div id="monaco-host" class="monaco-host"></div>
+
+      <!-- Editor / Bottom panel resize handle -->
+      <div class="resizer-h" id="panelResizer" title="Drag to resize"></div>
 
       <!-- Bottom Panel (Terminal, Problems, Disassembly, Memory Footprint) -->
       <div class="bottom-panel" id="bottomPanel">
@@ -1470,6 +1481,9 @@
           </div>
 
           <div style="display: flex; gap: 8px;">
+            <button id="copyPanelBtn" class="btn-secondary" style="padding: 2px 6px;" title="Copy Output">
+              <i class="fa-regular fa-copy"></i>
+            </button>
             <button id="clearTerminalBtn" class="btn-secondary" style="padding: 2px 6px;" title="Clear Output">
               <i class="fa-solid fa-ban"></i>
             </button>

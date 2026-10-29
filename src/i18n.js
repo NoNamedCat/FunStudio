@@ -18,9 +18,9 @@ export const TRANSLATIONS = {
     btn_export_zip: "Export ZIP",
     
     // Sidebar Views
-    explorer_title: "Project Explorer",
+    explorer_title: "File Explorer",
     examples_title: "Examples Catalogue",
-    projects_title: "Saved Projects",
+    projects_title: "Project Explorer",
     hardware_title: "Target Microcontroller",
     compiler_title: "Compiler Configuration",
     help_title: "About FunStudio",
@@ -113,9 +113,9 @@ export const TRANSLATIONS = {
     btn_export_zip: "Exportar ZIP",
     
     // Sidebar Views
-    explorer_title: "Explorador de Proyecto",
+    explorer_title: "Explorador de Archivos",
     examples_title: "Catálogo de Ejemplos",
-    projects_title: "Proyectos Guardados",
+    projects_title: "Explorador de Proyectos",
     hardware_title: "Microcontrolador Objetivo",
     compiler_title: "Configuración del Compilador",
     help_title: "Acerca de FunStudio",
@@ -207,9 +207,9 @@ export const TRANSLATIONS = {
     btn_save_project: "Enregistrer",
     btn_export_zip: "Exporter ZIP",
     
-    explorer_title: "Explorateur de Projet",
+    explorer_title: "Explorateur de Fichiers",
     examples_title: "Catalogue d'Exemples",
-    projects_title: "Projets Enregistrés",
+    projects_title: "Explorateur de Projets",
     hardware_title: "Microcontrôleur Cible",
     compiler_title: "Options du Compilateur",
     help_title: "À propos de FunStudio",
@@ -294,9 +294,9 @@ export const TRANSLATIONS = {
     btn_save_project: "Speichern",
     btn_export_zip: "ZIP exportieren",
     
-    explorer_title: "Projekt-Explorer",
+    explorer_title: "Datei-Explorer",
     examples_title: "Beispielkatalog",
-    projects_title: "Gespeicherte Projekte",
+    projects_title: "Projekt-Explorer",
     hardware_title: "Ziel-Mikrocontroller",
     compiler_title: "Compiler-Optionen",
     help_title: "Über FunStudio",

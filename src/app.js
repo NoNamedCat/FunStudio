@@ -56,8 +56,6 @@ const cursorPos = document.getElementById("cursorPos");
 const breadcrumbProject = document.getElementById("breadcrumbProject");
 const breadcrumbCurrentFile = document.getElementById("breadcrumbCurrentFile");
 
-const topbarProjectBtn = document.getElementById("topbarProjectBtn");
-const topbarProjectName = document.getElementById("topbarProjectName");
 const explorerProjectName = document.getElementById("explorerProjectName");
 const explorerMcuBadge = document.getElementById("explorerMcuBadge");
 const projectFilesContainer = document.getElementById("projectFilesContainer");
@@ -206,7 +204,6 @@ function renderProjectExplorer() {
   const proj = projectManager.getActiveProject();
   if (!proj) return;
 
-  topbarProjectName.textContent = proj.name;
   explorerProjectName.textContent = proj.name;
   explorerMcuBadge.textContent = proj.mcu.toUpperCase();
   breadcrumbProject.textContent = proj.name;
@@ -391,6 +388,22 @@ function switchToFile(filename) {
   renderTabs();
 }
 
+// Open EVERY file of the (now active) project as a tab and activate main.c.
+// Used right after creating/switching to a project: the previous project's
+// tabs are all closed, the new project's files are all opened, and main.c is
+// shown. activeFile is set to a sentinel (not a real file) so switchToFile's
+// "save the file we're leaving" step is a no-op — the whole previous project
+// was abandoned, not a single file of it — which also prevents the stale
+// editor content from overwriting the freshly-loaded main.c.
+function openProjectFiles() {
+  const proj = projectManager.getActiveProject();
+  if (!proj) return;
+  openFiles = Object.keys(proj.files);
+  activeFile = "";
+  const target = proj.files["main.c"] !== undefined ? "main.c" : openFiles[0];
+  switchToFile(target);
+}
+
 // 5. Examples Catalogue: Categorized Accordion View
 const expandedCategories = new Set();
 
@@ -522,14 +535,10 @@ function openExample(exId) {
     projectManager.saveActiveProjectFiles(cur.files, cur.mcu);
   }
 
-  // Close all previous tabs/files from previous project
-  openFiles = ["main.c"];
-  activeFile = "main.c";
-
   const proj = projectManager.openExampleAsProject(exId);
 
   renderProjectExplorer();
-  switchToFile("main.c");
+  openProjectFiles();
   renderSavedProjectsList();
   renderExamplesCatalogue();
 
@@ -593,13 +602,9 @@ function renderSavedProjectsList() {
 
       projectManager.switchProject(id);
 
-      // Close all previous open files/tabs
-      openFiles = ["main.c"];
-      activeFile = "main.c";
-
       document.querySelector('.activity-btn[data-sidebar="explorer"]').click();
       renderProjectExplorer();
-      switchToFile("main.c");
+      openProjectFiles();
       renderSavedProjectsList();
     });
   });
@@ -634,10 +639,6 @@ function renderSavedProjectsList() {
 }
 
 // 7. Modals: New Project & New File
-topbarProjectBtn.addEventListener("click", () => {
-  document.querySelector('.activity-btn[data-sidebar="projects"]').click();
-});
-
 btnOpenNewProjectModal.addEventListener("click", () => {
   newProjectModal.style.display = "flex";
   newProjectNameInput.value = `CH32 Project ${projectManager.getProjects().length + 1}`;
@@ -658,16 +659,19 @@ confirmCreateProjectBtn.addEventListener("click", () => {
     if (foundEx) tmplCode = foundEx.code;
   }
 
+  // Save the current editor content to the project being left before abandoning it.
+  const cur = projectManager.getActiveProject();
+  if (editor && cur && cur.files[activeFile] !== undefined) {
+    cur.files[activeFile] = editor.getValue();
+    projectManager.saveActiveProjectFiles(cur.files, cur.mcu);
+  }
+
   const newProj = projectManager.createProject(name, mcu, tmplCode);
   newProjectModal.style.display = "none";
 
-  // Close all previous open files/tabs from the previous project
-  openFiles = ["main.c"];
-  activeFile = "main.c";
-
   document.querySelector('.activity-btn[data-sidebar="explorer"]').click();
   renderProjectExplorer();
-  switchToFile("main.c");
+  openProjectFiles();
   renderSavedProjectsList();
   renderExamplesCatalogue();
   addLog(0, `✨ Project "${newProj.name}" created successfully (${mcu.toUpperCase()}).`, "success");
@@ -823,6 +827,106 @@ togglePanelBtn.addEventListener("click", () => {
 closePanelBtn.addEventListener("click", () => {
   bottomPanel.style.display = "none";
 });
+
+// Copy the content of the active bottom panel tab to the clipboard
+const copyPanelBtn = document.getElementById("copyPanelBtn");
+if (copyPanelBtn) {
+  copyPanelBtn.addEventListener("click", () => {
+    const activeTab = document.querySelector(".panel-tab.active");
+    const targetId = activeTab ? activeTab.getAttribute("data-target") : "panel-terminal";
+    let text = "";
+    if (targetId === "panel-disasm" && typeof compiledArtifacts !== "undefined" && compiledArtifacts && compiledArtifacts.disasm) {
+      text = compiledArtifacts.disasm;
+    } else if (targetId === "panel-terminal") {
+      text = Array.from(terminalOutput.querySelectorAll(".log-line"))
+        .map((line) => Array.from(line.children).map((c) => c.textContent.trim()).filter(Boolean).join(" "))
+        .join("\n");
+    } else {
+      const view = document.getElementById(targetId);
+      if (view) {
+        const clone = view.cloneNode(true);
+        clone.querySelectorAll(".disasm-toolbar, button, select, input").forEach((el) => el.remove());
+        // innerText needs the node attached to compute layout-aware text
+        clone.style.position = "absolute";
+        clone.style.left = "-99999px";
+        clone.style.display = "block";
+        document.body.appendChild(clone);
+        text = clone.innerText;
+        clone.remove();
+      }
+    }
+    navigator.clipboard.writeText(text.trim()).then(() => {
+      const icon = copyPanelBtn.querySelector("i");
+      icon.className = "fa-solid fa-check";
+      setTimeout(() => { icon.className = "fa-regular fa-copy"; }, 1200);
+    }).catch(() => {});
+  });
+}
+
+// Resizable layout: sidebar width and bottom panel height (persisted)
+(function initResizers() {
+  const sidebarResizer = document.getElementById("sidebarResizer");
+  const panelResizer = document.getElementById("panelResizer");
+  const editorContainer = document.querySelector(".editor-container");
+
+  const savedSidebarW = parseInt(localStorage.getItem("funstudio_sidebar_width"), 10);
+  const savedPanelH = parseInt(localStorage.getItem("funstudio_panel_height"), 10);
+  if (savedSidebarW) sidebar.style.width = `${savedSidebarW}px`;
+  if (savedPanelH) bottomPanel.style.height = `${savedPanelH}px`;
+
+  function startDrag(e, handle, mode, onMove, onEnd) {
+    e.preventDefault();
+    handle.classList.add("dragging");
+    document.body.classList.add("is-resizing", mode === "col" ? "resizing-col" : "resizing-row");
+    const move = (ev) => onMove(ev);
+    const up = () => {
+      handle.classList.remove("dragging");
+      document.body.classList.remove("is-resizing", "resizing-col", "resizing-row");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      onEnd();
+      if (editor) editor.layout();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  if (sidebarResizer) {
+    sidebarResizer.addEventListener("pointerdown", (e) => {
+      const startX = e.clientX;
+      const startW = sidebar.getBoundingClientRect().width;
+      startDrag(e, sidebarResizer, "col", (ev) => {
+        const maxW = Math.max(200, window.innerWidth - 300);
+        const w = Math.min(maxW, Math.max(160, startW + (ev.clientX - startX)));
+        sidebar.style.width = `${w}px`;
+      }, () => {
+        localStorage.setItem("funstudio_sidebar_width", parseInt(sidebar.style.width, 10));
+      });
+    });
+    sidebarResizer.addEventListener("dblclick", () => {
+      sidebar.style.width = "290px";
+      localStorage.removeItem("funstudio_sidebar_width");
+    });
+  }
+
+  if (panelResizer) {
+    panelResizer.addEventListener("pointerdown", (e) => {
+      const startY = e.clientY;
+      const startH = bottomPanel.getBoundingClientRect().height;
+      startDrag(e, panelResizer, "row", (ev) => {
+        const maxH = Math.max(120, editorContainer.getBoundingClientRect().height - 120);
+        const h = Math.min(maxH, Math.max(60, startH - (ev.clientY - startY)));
+        bottomPanel.style.height = `${h}px`;
+      }, () => {
+        localStorage.setItem("funstudio_panel_height", parseInt(bottomPanel.style.height, 10));
+      });
+    });
+    panelResizer.addEventListener("dblclick", () => {
+      bottomPanel.style.height = "210px";
+      localStorage.removeItem("funstudio_panel_height");
+    });
+  }
+})();
 
 // 11. 100% Genuine On-The-Fly Compilation Pipeline
 async function compileFirmware() {
