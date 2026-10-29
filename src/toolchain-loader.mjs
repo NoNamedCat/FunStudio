@@ -2,7 +2,7 @@
 // exposes its files (compiler .js/.wasm, sysroot/, manifest.json) as an
 // in-memory Map<relPath, Uint8Array>. The browser caches the compressed
 // bytes in IndexedDB keyed by release tag; Node uses memory only.
-import { gunzipSync, strFromU8 } from "fflate";
+import { gunzipSync, strFromU8 } from "./vendor/fflate.mjs";
 
 export const TOOLCHAIN_RELEASE = "v0.1.0";
 // raw.githubusercontent.com sends Access-Control-Allow-Origin: *, so the

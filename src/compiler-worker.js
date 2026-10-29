@@ -17,7 +17,9 @@ import { getToolchainFS, getToolchainText } from "./toolchain-loader.mjs";
 
 const IS_NODE = typeof process !== "undefined" && process.versions && process.versions.node;
 // Board-specific files (ch32fun SDK + cc1 include bundle) live in Fun_Studio,
-// NOT in the generic riscv-wasm-toolchain release.
+// NOT in the generic riscv-wasm-toolchain release. This file runs as a module
+// worker, so `location.href` is the WORKER script URL (…/src/compiler-worker.js);
+// resolve the site-root public/ dir one level up from src/, relative to the worker.
 const BOARD_BASE = IS_NODE
   ? "./public/ch32fun/"
   : (typeof location !== "undefined" && location.href
