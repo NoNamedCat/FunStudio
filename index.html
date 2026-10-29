@@ -481,6 +481,10 @@
       transition: background 0.1s;
     }
     .example-item-card:hover { background: var(--bg-hover); }
+    .example-item-card.active-example {
+      background: rgba(0, 122, 204, 0.12);
+      border-left: 3px solid var(--accent);
+    }
     .example-card-header {
       display: flex;
       align-items: center;
@@ -729,12 +733,17 @@
     }
 
     .tab-close {
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       color: var(--text-muted);
       padding: 2px 4px;
       border-radius: 3px;
+      margin-left: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
     }
-    .tab-close:hover { color: var(--text-bright); background: rgba(255,255,255,0.1); }
+    .tab-close:hover { color: var(--text-bright); background: rgba(255,255,255,0.15); }
 
     .editor-breadcrumbs {
       height: 24px;
@@ -1344,22 +1353,14 @@
           <div class="form-group" style="margin-bottom: 14px;">
             <label class="form-label" data-i18n="label_board">Board / Chip Target:</label>
             <select id="mcuSelect" class="form-select">
-              <optgroup label="⚡ WCH CH32 Series (ch32fun)">
-                <option value="ch32v003" selected>WCH CH32V003 (RV32EC - 48MHz)</option>
-                <option value="ch32v006">WCH CH32V006 (RV32EC+Zmmul - 48MHz)</option>
-                <option value="ch32x035">WCH CH32X035 (RV32IMAC - USB-PD)</option>
-                <option value="ch32v103">WCH CH32V103 (RV32IMAC - 72MHz)</option>
-                <option value="ch32v203">WCH CH32V203 (RV32IMAC - USB/CAN)</option>
-                <option value="ch32v307">WCH CH32V307 (RV32IMAFC - GbE/FPU)</option>
-                <option value="ch32l103">WCH CH32L103 (RV32IMAC - Low Power)</option>
-                <option value="ch582">WCH CH582 (RV32IMAC - BLE 5.x)</option>
-              </optgroup>
-              <optgroup label="🌐 Other RISC-V Targets">
-                <option value="esp32c3">Espressif ESP32-C3 (RV32IMC - 160MHz)</option>
-                <option value="rp2350">Raspberry Pi RP2350 (Hazard3)</option>
-                <option value="gd32vf103">GigaDevice GD32VF103 (RV32IMAC)</option>
-                <option value="generic">Generic RISC-V 32-bit Baremetal</option>
-              </optgroup>
+              <option value="ch32v003" selected>WCH CH32V003 (RV32EC - 48MHz)</option>
+              <option value="ch32v006">WCH CH32V006 (RV32EC+Zmmul - 48MHz)</option>
+              <option value="ch32x035">WCH CH32X035 (RV32IMAC - USB-PD)</option>
+              <option value="ch32v103">WCH CH32V103 (RV32IMAC - 72MHz)</option>
+              <option value="ch32v203">WCH CH32V203 (RV32IMAC - USB/CAN)</option>
+              <option value="ch32v307">WCH CH32V307 (RV32IMAFC - GbE/FPU)</option>
+              <option value="ch32l103">WCH CH32L103 (RV32IMAC - Low Power)</option>
+              <option value="ch582">WCH CH582 (RV32IMAC - BLE 5.x)</option>
             </select>
           </div>
 
@@ -1382,11 +1383,9 @@
           <div class="form-group" style="margin-bottom: 12px;">
             <label class="form-label" data-i18n="label_arch">ISA Architecture (-march):</label>
             <select id="archSelect" class="form-select">
-              <option value="rv32ec" selected>rv32ec (CH32V003 Base)</option>
-              <option value="rv32imac">rv32imac (Standard WCH V203/X035)</option>
+              <option value="rv32ec" selected>rv32ec (CH32V003 / CH32V006 Base)</option>
+              <option value="rv32imac">rv32imac (Standard WCH V203 / X035 / L103 / V103)</option>
               <option value="rv32imafc">rv32imafc (CH32V307 Hardware FPU)</option>
-              <option value="rv32imc">rv32imc (ESP32-C3 / RP2350)</option>
-              <option value="rv32i">rv32i (Base 32-bit Integer)</option>
             </select>
           </div>
 

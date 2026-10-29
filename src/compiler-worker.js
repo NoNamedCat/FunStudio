@@ -419,15 +419,6 @@ function getHardwareMcuConfig(mcu) {
       ],
     };
   }
-  if (norm.includes("ESP32") || norm.includes("RP2350") || norm.includes("GENERIC")) {
-    return {
-      targetMcu: "GENERIC",
-      ld: 0,
-      pkg: 1,
-      split: 0,
-      cflagsDefines: ["-DGENERIC_RISCV=1"],
-    };
-  }
   // Default: CH32V003
   return {
     targetMcu: "CH32V003",

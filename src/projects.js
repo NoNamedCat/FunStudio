@@ -96,11 +96,24 @@ export class ProjectManager {
   }
 
   createProjectFromExample(exampleId) {
+    return this.openExampleAsProject(exampleId);
+  }
+
+  openExampleAsProject(exampleId) {
     const example = EXAMPLES_CATALOGUE.find((ex) => ex.id === exampleId);
     if (!example) throw new Error("Example not found: " + exampleId);
 
     const mcu = example.mcus.includes("all") ? "ch32v003" : example.mcus[0];
-    const name = example.name.replace(/\.c$/, "").replace(/_/g, " ").toUpperCase();
+    const name = example.name.replace(/\.c$/, "");
+
+    // Check if an existing project with this exampleId already exists
+    let proj = this.projects.find((p) => p.exampleId === exampleId);
+    if (proj) {
+      this.activeProjectId = proj.id;
+      this.saveToStorage();
+      return proj;
+    }
+
     const files = {
       "main.c": example.code,
       "funconfig.h": example.funconfig || FUNCONFIG_H,
@@ -109,18 +122,33 @@ export class ProjectManager {
     if (example.extraFiles) {
       Object.assign(files, example.extraFiles);
     }
-    const newProj = {
-      id: "proj_" + Date.now(),
+
+    // Check if current project is an untouched "Blank Project"
+    const current = this.getActiveProject();
+    if (current && current.name === "Blank Project" && current.files["main.c"] === BLANK_TEMPLATE) {
+      current.exampleId = exampleId;
+      current.name = name;
+      current.mcu = mcu;
+      current.updatedAt = Date.now();
+      current.files = files;
+      this.saveToStorage();
+      return current;
+    }
+
+    // Otherwise create and activate a new project for this example
+    proj = {
+      id: "proj_ex_" + exampleId,
+      exampleId,
       name,
       mcu,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       files,
     };
-    this.projects.unshift(newProj);
-    this.activeProjectId = newProj.id;
+    this.projects.unshift(proj);
+    this.activeProjectId = proj.id;
     this.saveToStorage();
-    return newProj;
+    return proj;
   }
 
   switchProject(id) {

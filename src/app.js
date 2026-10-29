@@ -17,6 +17,7 @@ const projectManager = new ProjectManager();
 let editor = null;
 let currentWorker = null;
 let compiledArtifacts = null;
+let openFiles = ["main.c"];
 let activeFile = "main.c";
 let diagnosticsList = [];
 let autoSaveTimer = null;
@@ -259,9 +260,15 @@ function renderProjectExplorer() {
       if (confirm(`Delete file "${fname}" from project?`)) {
         try {
           projectManager.deleteFileFromActiveProject(fname);
-          if (activeFile === fname) switchToFile("main.c");
-          renderProjectExplorer();
-          renderTabs();
+          const delIdx = openFiles.indexOf(fname);
+          if (delIdx !== -1) openFiles.splice(delIdx, 1);
+          if (activeFile === fname) {
+            const next = openFiles[0] || "main.c";
+            switchToFile(next);
+          } else {
+            renderProjectExplorer();
+            renderTabs();
+          }
         } catch (err) {
           alert(err.message);
         }
@@ -277,29 +284,84 @@ function renderTabs() {
   const proj = projectManager.getActiveProject();
   if (!proj) return;
 
-  const files = Object.keys(proj.files);
+  // Filter openFiles to only include files that actually exist in the active project
+  openFiles = openFiles.filter((f) => proj.files[f] !== undefined);
+  if (openFiles.length === 0) {
+    const fallback = proj.files["main.c"] !== undefined ? "main.c" : Object.keys(proj.files)[0];
+    if (fallback) openFiles = [fallback];
+  }
+
+  // Ensure activeFile is in openFiles
+  if (!openFiles.includes(activeFile)) {
+    activeFile = openFiles[0] || "main.c";
+  }
+
   let html = "";
-  files.forEach((f) => {
+  openFiles.forEach((f) => {
     const isAct = f === activeFile;
     let icon = "fa-file-code icon-c";
     if (f.endsWith(".h")) icon = "fa-file-code icon-h";
     else if (f.endsWith(".ld")) icon = "fa-file-lines icon-ld";
+    else if (f.endsWith(".s") || f.endsWith(".S")) icon = "fa-file-lines icon-s";
 
     html += `
-      <div class="tab ${isAct ? "active" : ""}" data-file="${f}">
+      <div class="tab ${isAct ? "active" : ""}" data-file="${escapeHtml(f)}">
         <i class="fa-solid ${icon}"></i>
-        <span>${f}</span>
+        <span>${escapeHtml(f)}</span>
+        <span class="tab-close" data-close-file="${escapeHtml(f)}" title="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </span>
       </div>
     `;
   });
   editorTabs.innerHTML = html;
 
   editorTabs.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
+    tab.addEventListener("click", (e) => {
+      if (e.target.closest(".tab-close")) return;
       const f = tab.getAttribute("data-file");
       switchToFile(f);
     });
   });
+
+  editorTabs.querySelectorAll(".tab-close").forEach((closeBtn) => {
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const f = closeBtn.getAttribute("data-close-file");
+      closeFileTab(f);
+    });
+  });
+}
+
+function closeFileTab(filename) {
+  const proj = projectManager.getActiveProject();
+  if (!proj) return;
+
+  // Save if closing active file
+  if (editor && activeFile === filename && proj.files[filename] !== undefined) {
+    proj.files[filename] = editor.getValue();
+    projectManager.saveActiveProjectFiles(proj.files, proj.mcu);
+  }
+
+  const idx = openFiles.indexOf(filename);
+  if (idx !== -1) {
+    openFiles.splice(idx, 1);
+  }
+
+  if (activeFile === filename) {
+    if (openFiles.length > 0) {
+      const nextFile = openFiles[Math.max(0, idx - 1)] || openFiles[0];
+      switchToFile(nextFile);
+    } else {
+      const fallback = proj.files["main.c"] !== undefined ? "main.c" : Object.keys(proj.files)[0];
+      if (fallback) {
+        openFiles = [fallback];
+        switchToFile(fallback);
+      }
+    }
+  } else {
+    renderTabs();
+  }
 }
 
 function switchToFile(filename) {
@@ -312,6 +374,10 @@ function switchToFile(filename) {
     projectManager.saveActiveProjectFiles(proj.files, proj.mcu);
   }
 
+  if (!openFiles.includes(filename)) {
+    openFiles.push(filename);
+  }
+
   activeFile = filename;
   breadcrumbCurrentFile.textContent = filename;
 
@@ -322,6 +388,7 @@ function switchToFile(filename) {
   }
 
   renderProjectExplorer();
+  renderTabs();
 }
 
 // 5. Examples Catalogue: Categorized Accordion View
@@ -356,6 +423,8 @@ function renderExamplesCatalogue() {
     categories[ex.category].push(ex);
   });
 
+  const activeProj = projectManager.getActiveProject();
+
   let html = "";
   for (const [catName, items] of Object.entries(categories)) {
     // Only expand if there is an active search query matching items or if explicitly expanded by user
@@ -371,16 +440,18 @@ function renderExamplesCatalogue() {
         </div>
         <div class="tree-folder-children">
           ${items
-            .map(
-              (ex) => `
-            <div class="example-item-card" data-example-id="${ex.id}">
+            .map((ex) => {
+              const isActive = activeProj && (activeProj.exampleId === ex.id || activeProj.name === ex.name.replace(/\.c$/, ""));
+              return `
+            <div class="example-item-card ${isActive ? "active-example" : ""}" data-example-id="${ex.id}">
               <div class="example-card-header">
                 <div class="example-card-title">
                   <i class="fa-solid fa-file-code icon-c"></i>
                   <span>${escapeHtml(ex.name)}</span>
+                  ${isActive ? `<span class="chip-pill" style="background: rgba(78, 201, 176, 0.2); color: #4ec9b0; font-weight: 700; margin-left: 6px;">${t("active_badge") || "ACTIVE"}</span>` : ""}
                 </div>
-                <button class="btn-example-clone" data-clone-id="${ex.id}" title="${t("clone_as_project")}">
-                  <i class="fa-solid fa-plus"></i> ${t("clone_as_project")}
+                <button class="btn-example-clone" data-clone-id="${ex.id}" title="${t("open_example") || "Open Example"}">
+                  <i class="fa-solid ${isActive ? "fa-check" : "fa-folder-open"}"></i> ${isActive ? (t("active_badge") || "ACTIVE") : (t("open_example") || "Open")}
                 </button>
               </div>
               <div class="example-card-desc">${escapeHtml(ex.description)}</div>
@@ -390,8 +461,8 @@ function renderExamplesCatalogue() {
                 </div>
               </div>
             </div>
-          `
-            )
+          `;
+            })
             .join("")}
         </div>
       </div>
@@ -423,36 +494,46 @@ function renderExamplesCatalogue() {
     });
   });
 
-  // Open example in editor for preview
+  // Open example in editor and activate it as current project
   examplesListContainer.querySelectorAll(".example-item-card").forEach((card) => {
-    card.addEventListener("click", (e) => {
-      if (e.target.closest(".btn-example-clone")) return;
+    card.addEventListener("click", () => {
       const exId = card.getAttribute("data-example-id");
-      const ex = EXAMPLES_CATALOGUE.find((x) => x.id === exId);
-      if (ex && editor) {
-        editor.setValue(ex.code);
-        addLog(0, `📖 Previewing example "${ex.name}". You can create a new project from it using "Create Project".`, "info");
-      }
+      openExample(exId);
     });
   });
 
-  // Create Project from Example
   examplesListContainer.querySelectorAll(".btn-example-clone").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const exId = btn.getAttribute("data-clone-id");
-      try {
-        const newProj = projectManager.createProjectFromExample(exId);
-        activeFile = "main.c";
-        document.querySelector('.activity-btn[data-sidebar="explorer"]').click();
-        renderProjectExplorer();
-        switchToFile("main.c");
-        addLog(0, `✨ Project "${newProj.name}" created from example "${exId}".`, "success");
-      } catch (err) {
-        alert(err.message);
-      }
+      openExample(exId);
     });
   });
+}
+
+function openExample(exId) {
+  const ex = EXAMPLES_CATALOGUE.find((x) => x.id === exId);
+  if (!ex) return;
+
+  // Save current active project file if modified before switching
+  const cur = projectManager.getActiveProject();
+  if (editor && cur && cur.files[activeFile] !== undefined) {
+    cur.files[activeFile] = editor.getValue();
+    projectManager.saveActiveProjectFiles(cur.files, cur.mcu);
+  }
+
+  // Close all previous tabs/files from previous project
+  openFiles = ["main.c"];
+  activeFile = "main.c";
+
+  const proj = projectManager.openExampleAsProject(exId);
+
+  renderProjectExplorer();
+  switchToFile("main.c");
+  renderSavedProjectsList();
+  renderExamplesCatalogue();
+
+  addLog(0, `✓ Project "${proj.name}" loaded (${proj.mcu.toUpperCase()}). Ready to compile.`, "info");
 }
 
 if (exampleSearchInput) {
@@ -502,11 +583,24 @@ function renderSavedProjectsList() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const id = btn.getAttribute("data-id");
+
+      // Save current file before switching
+      const cur = projectManager.getActiveProject();
+      if (editor && cur && cur.files[activeFile] !== undefined) {
+        cur.files[activeFile] = editor.getValue();
+        projectManager.saveActiveProjectFiles(cur.files, cur.mcu);
+      }
+
       projectManager.switchProject(id);
+
+      // Close all previous open files/tabs
+      openFiles = ["main.c"];
       activeFile = "main.c";
+
       document.querySelector('.activity-btn[data-sidebar="explorer"]').click();
       renderProjectExplorer();
       switchToFile("main.c");
+      renderSavedProjectsList();
     });
   });
 
@@ -566,10 +660,16 @@ confirmCreateProjectBtn.addEventListener("click", () => {
 
   const newProj = projectManager.createProject(name, mcu, tmplCode);
   newProjectModal.style.display = "none";
+
+  // Close all previous open files/tabs from the previous project
+  openFiles = ["main.c"];
   activeFile = "main.c";
+
   document.querySelector('.activity-btn[data-sidebar="explorer"]').click();
   renderProjectExplorer();
   switchToFile("main.c");
+  renderSavedProjectsList();
+  renderExamplesCatalogue();
   addLog(0, `✨ Project "${newProj.name}" created successfully (${mcu.toUpperCase()}).`, "success");
 });
 
