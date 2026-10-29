@@ -1,6 +1,16 @@
 # Build and intermediate toolchain artifacts
 build/
+# Toolchain is now fetched at runtime from the release (see src/toolchain-loader.mjs)
+public/wasm-toolchain/
 node_modules/
 dist/
 .DS_Store
 *.log
+
+# Stray configure/make outputs leaked to repo root (real build lives in build/)
+/Makefile
+/config.status
+/config.log
+/serdep.tmp
+/etc/
+/riscv32-unknown-elf/

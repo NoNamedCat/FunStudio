@@ -13,13 +13,16 @@
  */
 
 import { matchMultilib } from "./multilib.js";
+import { getToolchainFS, getToolchainText } from "./toolchain-loader.mjs";
 
 const IS_NODE = typeof process !== "undefined" && process.versions && process.versions.node;
-const WASM_BASE = IS_NODE
-  ? "./public/wasm-toolchain/"
+// Board-specific files (ch32fun SDK + cc1 include bundle) live in Fun_Studio,
+// NOT in the generic riscv-wasm-toolchain release.
+const BOARD_BASE = IS_NODE
+  ? "./public/ch32fun/"
   : (typeof location !== "undefined" && location.href
-      ? new URL("../public/wasm-toolchain/", location.href).href
-      : "./public/wasm-toolchain/");
+      ? new URL("../public/ch32fun/", location.href).href
+      : "./public/ch32fun/");
 
 // Toolchain module factories
 let cc1Factory = null;
@@ -71,19 +74,39 @@ async function makeNodeRequire() {
   };
 }
 
-async function loadToolFactory(jsPath, exportName) {
-  let scriptText = "";
+// Resolve an in-memory wasm binary to a reference the emscripten loader can
+// read: a data: URI in the browser (no HTTP, no disk), a temp file in Node
+// (emscripten's Node readAsync uses fs.readFileSync). Verified against the
+// release cc1.js: this build has no wasmBinary option and readBinary is not
+// overridable, so locateFile is the only in-memory hook.
+async function resolveWasmRef(wasmName) {
+  const bytes = (await getToolchainFS()).get(wasmName);
+  if (!bytes) throw new Error(`toolchain wasm missing: ${wasmName}`);
   if (IS_NODE) {
-    const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
-    scriptText = fs.readFileSync(jsPath, "utf8");
-  } else {
-    const response = await fetch(jsPath);
-    if (!response.ok) {
-      throw new Error(`Tool script not found: ${jsPath} (${response.status})`);
-    }
-    scriptText = await response.text();
+    const fs = (await import("node:fs")).default;
+    const os = (await import("node:os")).default;
+    const path = (await import("node:path")).default;
+    const dir = path.join(os.tmpdir(), "riscv-wasm-toolchain");
+    fs.mkdirSync(dir, { recursive: true });
+    const p = path.join(dir, wasmName);
+    if (!fs.existsSync(p) || fs.statSync(p).size !== bytes.length) fs.writeFileSync(p, bytes);
+    return p;
   }
-  scriptText = scriptText.replace(/^#!.*?\n/, "");
+  return "data:application/wasm;base64," + toBase64(bytes);
+}
+
+function toBase64(u8) {
+  const CH = 0x8000;
+  let s = "";
+  for (let i = 0; i < u8.length; i += CH) {
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+  }
+  return btoa(s);
+}
+
+async function loadToolFactory(jsName, exportName, wasmName) {
+  const scriptText = (await getToolchainText(jsName)).replace(/^#!.*?\n/, "");
+  const ref = await resolveWasmRef(wasmName);
 
   const factory = new Function(
     "require", "__dirname", "__filename",
@@ -91,17 +114,18 @@ async function loadToolFactory(jsPath, exportName) {
       `\nreturn typeof ${exportName} !== 'undefined' ? ${exportName} : (typeof createModule !== 'undefined' ? createModule : null);`
   );
   const nodeArgs = IS_NODE
-    ? [await makeNodeRequire(), (await import("node:path")).default.dirname(jsPath), jsPath]
+    ? [await makeNodeRequire(), (await import("node:path")).default.join("src"), jsName]
     : [undefined, "", ""];
-  return factory(...nodeArgs);
+  const base = factory(...nodeArgs);
+  return (opts = {}) => base({ locateFile: (p) => (p.endsWith(".wasm") ? ref : p), ...opts });
 }
 
 async function fetchSdkFile(relPath) {
   if (IS_NODE) {
     const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
-    return fs.readFileSync(`./public/wasm-toolchain/sdk/${relPath}`, "utf8");
+    return fs.readFileSync(`./public/ch32fun/sdk/${relPath}`, "utf8");
   } else {
-    const res = await fetch(`${WASM_BASE}sdk/${relPath}`);
+    const res = await fetch(`${BOARD_BASE}sdk/${relPath}`);
     if (!res.ok) throw new Error(`Could not fetch SDK file: ${relPath}`);
     return await res.text();
   }
@@ -110,9 +134,9 @@ async function fetchSdkFile(relPath) {
 async function fetchSdkBinary(relPath) {
   if (IS_NODE) {
     const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
-    return fs.readFileSync(`./public/wasm-toolchain/sdk/${relPath}`);
+    return fs.readFileSync(`./public/ch32fun/sdk/${relPath}`);
   } else {
-    const res = await fetch(`${WASM_BASE}sdk/${relPath}`);
+    const res = await fetch(`${BOARD_BASE}sdk/${relPath}`);
     if (!res.ok) throw new Error(`Could not fetch SDK binary: ${relPath}`);
     const buf = await res.arrayBuffer();
     return new Uint8Array(buf);
@@ -124,29 +148,15 @@ const BASE_MULTILIB = "rv32imc/ilp32";
 
 async function fetchSysrootBinary(relPath) {
   if (cachedSysrootBinary[relPath]) return cachedSysrootBinary[relPath];
-  let data;
-  if (IS_NODE) {
-    const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
-    data = new Uint8Array(fs.readFileSync(`./public/wasm-toolchain/sysroot/${relPath}`));
-  } else {
-    const res = await fetch(`${WASM_BASE}sysroot/${relPath}`);
-    if (!res.ok) throw new Error(`Could not fetch sysroot file: ${relPath}`);
-    data = new Uint8Array(await res.arrayBuffer());
-  }
+  const data = (await getToolchainFS()).get(`sysroot/${relPath}`);
+  if (!data) throw new Error(`Could not fetch sysroot file: ${relPath}`);
   cachedSysrootBinary[relPath] = data;
   return data;
 }
 
 async function ensureSysrootManifest() {
   if (cachedSysrootManifest) return cachedSysrootManifest;
-  if (IS_NODE) {
-    const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
-    cachedSysrootManifest = JSON.parse(fs.readFileSync("./public/wasm-toolchain/manifest.json", "utf8")).sysrootFiles;
-  } else {
-    const res = await fetch(`${WASM_BASE}manifest.json`);
-    if (!res.ok) throw new Error("Could not fetch sysroot manifest.json");
-    cachedSysrootManifest = (await res.json()).sysrootFiles;
-  }
+  cachedSysrootManifest = JSON.parse(await getToolchainText("manifest.json")).sysrootFiles;
   return cachedSysrootManifest;
 }
 
@@ -166,10 +176,10 @@ async function preloadEnvironment() {
   if (!cachedHeaders) {
     try {
       if (IS_NODE) {
-        const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
-        cachedHeaders = JSON.parse(fs.readFileSync("./public/wasm-toolchain/headers.json", "utf8"));
+        const fs = (await import("node:fs")).default;
+        cachedHeaders = JSON.parse(fs.readFileSync(`./public/ch32fun/headers.json`, "utf8"));
       } else {
-        const res = await fetch(`${WASM_BASE}headers.json`);
+        const res = await fetch(`${BOARD_BASE}headers.json`);
         if (res.ok) cachedHeaders = await res.json();
       }
     } catch (e) {
@@ -181,10 +191,10 @@ async function preloadEnvironment() {
   if (!cachedGccHeaders) {
     try {
       if (IS_NODE) {
-        const fs = typeof require !== "undefined" ? require("fs") : (await import("node:fs")).default;
-        cachedGccHeaders = JSON.parse(fs.readFileSync("./public/wasm-toolchain/gcc-headers.json", "utf8"));
+        const fs = (await import("node:fs")).default;
+        cachedGccHeaders = JSON.parse(fs.readFileSync(`./public/ch32fun/gcc-headers.json`, "utf8"));
       } else {
-        const res = await fetch(`${WASM_BASE}gcc-headers.json`);
+        const res = await fetch(`${BOARD_BASE}gcc-headers.json`);
         if (res.ok) cachedGccHeaders = await res.json();
       }
     } catch (e) {
@@ -225,7 +235,8 @@ function populateFSHeaders(mod) {
   }
 
   if (cachedGccHeaders) {
-    const gccIncDir = "/usr/local/lib/gcc/riscv32-unknown-elf/15.2.0/include";
+    // Matches the release cc1 GCC_INSTALL_DIR built with --prefix=/opt/riscv-wasm.
+    const gccIncDir = "/opt/riscv-wasm/lib/gcc/riscv32-unknown-elf/15.2.0/include";
     let curr = "";
     for (const p of gccIncDir.split("/").filter(Boolean)) {
       curr += "/" + p;
@@ -539,12 +550,12 @@ self.onmessage = async (e) => {
     await preloadEnvironment();
 
     // Load tool factories
-    if (!cc1Factory) cc1Factory = await loadToolFactory(`${WASM_BASE}cc1.js`, "createCc1");
-    if (!asFactory) asFactory = await loadToolFactory(`${WASM_BASE}riscv-as.js`, "createAs");
-    if (!ldFactory) ldFactory = await loadToolFactory(`${WASM_BASE}riscv-ld.js`, "createLd");
-    if (!objdumpFactory) objdumpFactory = await loadToolFactory(`${WASM_BASE}riscv-objdump.js`, "createObjdump");
-    if (!sizeFactory) sizeFactory = await loadToolFactory(`${WASM_BASE}riscv-size.js`, "createSize");
-    if (!objcopyFactory) objcopyFactory = await loadToolFactory(`${WASM_BASE}riscv-objcopy.js`, "createObjcopy");
+    if (!cc1Factory) cc1Factory = await loadToolFactory("cc1.js", "createCc1", "cc1.wasm");
+    if (!asFactory) asFactory = await loadToolFactory("riscv-as.js", "createAs", "riscv-as.wasm");
+    if (!ldFactory) ldFactory = await loadToolFactory("riscv-ld.js", "createLd", "riscv-ld.wasm");
+    if (!objdumpFactory) objdumpFactory = await loadToolFactory("riscv-objdump.js", "createObjdump", "riscv-objdump.wasm");
+    if (!sizeFactory) sizeFactory = await loadToolFactory("riscv-size.js", "createSize", "riscv-size.wasm");
+    if (!objcopyFactory) objcopyFactory = await loadToolFactory("riscv-objcopy.js", "createObjcopy", "riscv-objcopy.wasm");
 
     const objectFilesToLink = [];
 
@@ -566,7 +577,6 @@ self.onmessage = async (e) => {
         printErr: (text) => {
           if (text.includes("error:")) funErrors.push(text);
         },
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "cc1.wasm" : p}`,
       });
       populateFSHeaders(cc1Fun);
       populateProjectFiles(cc1Fun, files);
@@ -591,7 +601,6 @@ self.onmessage = async (e) => {
       progress(25, "[2/7] riscv-as: Assembling ch32fun.o...");
       const asFun = await asFactory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-as.wasm" : p}`,
       });
       asFun.FS.writeFile("/ch32fun.s", funAsm);
       asFun.callMain(["-march=" + march, "-mabi=" + currentAbi, "-o", "/ch32fun.o", "/ch32fun.s"]);
@@ -608,7 +617,6 @@ self.onmessage = async (e) => {
       // 1. Compile rv003usb.c
       const cc1RvC = await cc1Factory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "cc1.wasm" : p}`,
       });
       populateFSHeaders(cc1RvC);
       populateProjectFiles(cc1RvC, files);
@@ -621,7 +629,6 @@ self.onmessage = async (e) => {
       ]);
       const asRvC = await asFactory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-as.wasm" : p}`,
       });
       asRvC.FS.writeFile("/rv003usb_c.s", cc1RvC.FS.readFile("/rv003usb_c.s"));
       asRvC.callMain(["-march=" + march, "-mabi=" + currentAbi, "-o", "/rv003usb_c.o", "/rv003usb_c.s"]);
@@ -630,7 +637,6 @@ self.onmessage = async (e) => {
       // 2. Preprocess and assemble rv003usb.S
       const cc1RvS = await cc1Factory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "cc1.wasm" : p}`,
       });
       populateFSHeaders(cc1RvS);
       populateProjectFiles(cc1RvS, files);
@@ -649,7 +655,6 @@ self.onmessage = async (e) => {
       ]);
       const asRvS = await asFactory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-as.wasm" : p}`,
       });
       asRvS.FS.writeFile("/rv003usb_s.s", cc1RvS.FS.readFile("/rv003usb_s.s"));
       asRvS.callMain(["-march=" + march, "-mabi=" + currentAbi, "-o", "/rv003usb_s.o", "/rv003usb_s.s"]);
@@ -680,7 +685,6 @@ self.onmessage = async (e) => {
           log(2, text, "info");
         }
       },
-      locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "cc1.wasm" : p}`,
     });
 
     populateFSHeaders(cc1Mod);
@@ -707,7 +711,6 @@ self.onmessage = async (e) => {
     // Assemble main.s -> main.o
     const asMod = await asFactory({
       noInitialRun: true,
-      locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-as.wasm" : p}`,
     });
     asMod.FS.writeFile("/main.s", mainAsmText);
     asMod.callMain(["-march=" + march, "-mabi=" + currentAbi, "-o", "/main.o", "/main.s"]);
@@ -727,7 +730,6 @@ self.onmessage = async (e) => {
       log(3, `Preprocessing ch32fun.ld with GCC cc1 (TARGET_MCU=${mcuConfig.targetMcu}, TARGET_MCU_LD=${mcuConfig.ld}, MCU_PACKAGE=${mcuConfig.pkg}, TARGET_MCU_MEMORY_SPLIT=${mcuConfig.split})...`);
       const cc1Ld = await cc1Factory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "cc1.wasm" : p}`,
       });
       cc1Ld.FS.writeFile("/ch32fun.ld", finalLinkerScript);
       cc1Ld.callMain([
@@ -755,7 +757,6 @@ self.onmessage = async (e) => {
         }
         log(3, `[ld] ${text}`, text.includes("error:") ? "error" : "warn");
       },
-      locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-ld.wasm" : p}`,
     });
 
     ldMod.FS.writeFile("/link.ld", finalLinkerScript);
@@ -818,7 +819,6 @@ self.onmessage = async (e) => {
     const odMod = await objdumpFactory({
       noInitialRun: true,
       print: (text) => disasmLines.push(text),
-      locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-objdump.wasm" : p}`,
     });
 
     odMod.FS.writeFile("/main.elf", elfBytes);
@@ -837,7 +837,6 @@ self.onmessage = async (e) => {
     const szMod = await sizeFactory({
       noInitialRun: true,
       print: (text) => { sizeOutput += text + "\n"; },
-      locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-size.wasm" : p}`,
     });
 
     szMod.FS.writeFile("/main.elf", elfBytes);
@@ -864,7 +863,6 @@ self.onmessage = async (e) => {
     try {
       const ocHexMod = await objcopyFactory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-objcopy.wasm" : p}`,
       });
       ocHexMod.FS.writeFile("/main.elf", elfBytes);
       ocHexMod.callMain(["-O", "ihex", "/main.elf", "/main.hex"]);
@@ -877,7 +875,6 @@ self.onmessage = async (e) => {
     try {
       const ocBinMod = await objcopyFactory({
         noInitialRun: true,
-        locateFile: (p) => `${WASM_BASE}${p.endsWith(".wasm") ? "riscv-objcopy.wasm" : p}`,
       });
       ocBinMod.FS.writeFile("/main.elf", elfBytes);
       ocBinMod.callMain(["-R", ".storage", "-O", "binary", "/main.elf", "/main.bin"]);
