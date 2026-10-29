@@ -5,8 +5,10 @@
 import { gunzipSync, strFromU8 } from "fflate";
 
 export const TOOLCHAIN_RELEASE = "v0.1.0";
+// raw.githubusercontent.com sends Access-Control-Allow-Origin: *, so the
+// browser can fetch it cross-origin (GitHub release assets do not).
 const RELEASE_URL =
-  "https://github.com/NoNamedCat/riscv-wasm-toolchain/releases/download/" +
+  "https://raw.githubusercontent.com/NoNamedCat/riscv-wasm-toolchain/" +
   TOOLCHAIN_RELEASE + "/riscv-wasm-toolchain.tar.gz";
 
 const IS_BROWSER =
