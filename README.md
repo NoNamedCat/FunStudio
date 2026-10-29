@@ -63,7 +63,7 @@ Abre tu navegador en: **`http://localhost:3000`**
 
 ## 🛠️ Compilación de los binarios WebAssembly (Build Pipeline)
 
-El script `./build-riscv-wasm.sh` automatiza todo el proceso de construcción desde el código fuente oficial de GNU:
+El script `build-riscv-wasm.sh` (en el repo [`riscv-wasm-toolchain`](https://github.com/NoNamedCat/riscv-wasm-toolchain)) automatiza todo el proceso de construcción desde el código fuente oficial de GNU:
 
 ### Requisitos:
 - **Linux** (x86_64 o ARM64)
@@ -81,7 +81,11 @@ El script `./build-riscv-wasm.sh` automatiza todo el proceso de construcción de
 3. **Dependencias a WASM:** Compila GMP, MPFR y MPC a WebAssembly (`--host=wasm32`) con `emconfigure` y `emmake`.
 4. **Compilador a WASM:** Compila `cc1` y `cc1plus` (GCC 15.2.0) a WebAssembly exportando el sistema de archivos (`FS`) y la función `callMain`.
 5. **Binutils a WASM:** Compila `gas` (`as`), `ld` y `objcopy` a WebAssembly.
-6. **Empaquetado:** Genera la carpeta `public/wasm-toolchain/` con el sysroot, las herramientas `.wasm` y el `manifest.json`.
+6. **Empaquetado:** Empaqueta las herramientas `.wasm`, el sysroot y el `manifest.json` en un `riscv-wasm-toolchain.tar.gz` y publica un **release** en GitHub (`NoNamedCat/riscv-wasm-toolchain`).
+
+> **El toolchain NO vive en este repo.** En runtime, `src/toolchain-loader.mjs` descarga el release pinado (`TOOLCHAIN_RELEASE`, ver. actual **v0.3.0**), lo descomprime en memoria y el worker lo consume desde ese mapa (nada de `public/wasm-toolchain/` local).
+>
+> El script de build anterior vive en el repo separado [`riscv-wasm-toolchain`](https://github.com/NoNamedCat/riscv-wasm-toolchain).
 
 ---
 
@@ -126,16 +130,17 @@ La librería exacta resultante se carga del sysroot y se pasa a `riscv-ld.wasm`,
 
 ```
 microcontroller-web-compiler/
-├── build-riscv-wasm.sh       # Script reproducible para compilar GCC 15 a WASM
 ├── server.js                 # Servidor HTTP con cabeceras COOP/COEP para WASM
 ├── index.html                # Interfaz web del compilador / IDE
 ├── package.json              # Configuración y scripts npm
 ├── src/
 │   ├── app.js                # Lógica del frontend y gestión de descargas
+│   ├── toolchain-loader.mjs  # Descarga y descomprime el release del toolchain en memoria
 │   └── compiler-worker.js    # Web Worker que encadena cc1 -> as -> ld -> objcopy
 ├── examples/
 │   ├── blink.c               # Ejemplo de parpadeo de LED baremetal
 │   └── uart_hello.c          # Ejemplo de UART y benchmark matemático en RISC-V
 └── public/
-    └── wasm-toolchain/       # Directorio de distribución de los binarios WASM
+    └── ch32fun/              # Bundle local del consumidor: board/SDK (ch32fun.*, rv003usb.*)
+                              #   + include bundles (headers.json, gcc-headers.json)
 ```
