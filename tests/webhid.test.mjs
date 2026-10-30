@@ -37,3 +37,16 @@ import * as M from "../src/flasher/webhid.js";
 for (const name of ["pairDevice", "flashToBoard", "bootBoard", "closeBoard"]) {
   assert.strictEqual(typeof M[name], "function", `missing export ${name}`);
 }
+
+// recv timeout bookkeeping: a timed-out waiter must not eat the next report
+import { createReportQueue } from "../src/flasher/webhid.js";
+const q = createReportQueue();
+await q.recv(50).catch((e) => assert.strictEqual(e.message, "timeout"));
+const pending = q.recv(500);
+q.push(new Uint8Array([7, 8, 9]));
+const got = await Promise.race([
+  pending,
+  new Promise((r) => setTimeout(() => r(undefined), 200)),
+]);
+assert.deepStrictEqual([...got], [7, 8, 9]);
+console.log("webhid: queue tests passed");

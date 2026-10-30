@@ -1504,6 +1504,7 @@ const cancelFlashModalBtn = document.getElementById("cancelFlashModalBtn");
 const dlOptionFlash = document.getElementById("dlOptionFlash");
 
 let flashBoard = null;
+let flashPhase = "idle";
 
 function flashLogAppend(msg) {
   flashLogEl.textContent += msg + "\n";
@@ -1512,8 +1513,8 @@ function flashLogAppend(msg) {
 
 function openFlashModal() {
   flashModal.style.display = "flex";
+  flashStatusEl.textContent = t("flash_status_idle");
   if (!compiledArtifacts || !compiledArtifacts.bin) {
-    flashStatusEl.textContent = t("flash_status_idle");
     flashHintEl.textContent = t("flash_need_compile");
     flashFlashBtn.disabled = true;
     return;
@@ -1565,12 +1566,14 @@ flashFlashBtn.addEventListener("click", async () => {
   flashFlashBtn.disabled = true;
   flashBootBtn.disabled = true;
   flashProgEl.value = 0;
+  flashPhase = "idle";
   flashHintEl.textContent = t("flash_hint_disconnect");
   flashStatusEl.textContent = t("flash_status_flashing");
   try {
     await flashToBoard(flashBoard, compiledArtifacts.bin, {
       onProgress: (pct) => { flashProgEl.value = pct; },
       onStatus: (phase) => {
+        flashPhase = phase;
         if (phase === "reconnect") flashHintEl.textContent = t("flash_hint_reconnect");
         if (phase === "done") flashStatusEl.textContent = t("flash_status_done");
       },
@@ -1579,8 +1582,10 @@ flashFlashBtn.addEventListener("click", async () => {
     flashBootBtn.disabled = false;
   } catch (err) {
     const msg = String(err && err.message || err);
-    if (msg.includes("timeout")) {
-      flashStatusEl.textContent = t("flash_error_timeout");
+    if (/cancelled/i.test(msg)) {
+      flashStatusEl.textContent = t("flash_error_closed");
+    } else if (msg.includes("timeout")) {
+      flashStatusEl.textContent = t(flashPhase === "disconnect" ? "flash_error_not_bootloader" : "flash_error_timeout");
     } else if (/not responding/i.test(msg)) {
       flashStatusEl.textContent = t("flash_error_not_bootloader");
     } else {

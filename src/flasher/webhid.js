@@ -57,10 +57,45 @@ export function cmdBoot() {
 
 // ===== Browser layer (WebHID) =====
 
+// Report queue: push() delivers to the oldest live waiter; a waiter that
+// times out is removed by identity so it can never consume a later report.
+export function createReportQueue() {
+  let inQueue = [];
+  let waiters = [];
+  return {
+    push(data) {
+      if (waiters.length) {
+        waiters.shift().resolve(data);
+      } else {
+        inQueue.push(data);
+      }
+    },
+    recv(timeoutMs = RECV_TIMEOUT_MS) {
+      return new Promise((resolve, reject) => {
+        if (inQueue.length) return resolve(inQueue.shift());
+        let entry;
+        const timer = setTimeout(() => {
+          const i = waiters.indexOf(entry);
+          if (i >= 0) waiters.splice(i, 1);
+          reject(new Error("timeout"));
+        }, timeoutMs);
+        entry = {
+          resolve: (val) => { clearTimeout(timer); resolve(val); },
+          reject,
+        };
+        waiters.push(entry);
+      });
+    },
+    reset() {
+      inQueue = [];
+      waiters = [];
+    },
+  };
+}
+
+let reportQueue = createReportQueue();
 let activeDevice = null;
 let inputReportDevice = null;
-let inQueue = [];
-let waiters = [];
 let outReportLen = DEFAULT_REPORT_LEN;
 let flashing = false;
 
@@ -90,12 +125,7 @@ function onInputReport(e) {
   if (outReportLen === DEFAULT_REPORT_LEN && u8 && u8.length >= 8 && u8.length !== outReportLen) {
     outReportLen = u8.length;
   }
-  if (waiters.length) {
-    const { resolve } = waiters.shift();
-    resolve(u8);
-  } else {
-    inQueue.push(u8);
-  }
+  reportQueue.push(u8);
 }
 
 function detachInputReportListener() {
@@ -111,28 +141,14 @@ function detachInputReportListener() {
 
 function resetFlashState() {
   detachInputReportListener();
-  inQueue = [];
-  waiters = [];
+  reportQueue.reset();
   outReportLen = DEFAULT_REPORT_LEN;
   activeDevice = null;
   flashing = false;
 }
 
 function recv(timeoutMs = RECV_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    if (inQueue.length) {
-      return resolve(inQueue.shift());
-    }
-    const timer = setTimeout(() => {
-      const idx = waiters.findIndex((w) => w.resolve === resolve);
-      if (idx >= 0) waiters.splice(idx, 1);
-      reject(new Error("timeout"));
-    }, timeoutMs);
-    waiters.push({
-      resolve: (val) => { clearTimeout(timer); resolve(val); },
-      reject,
-    });
-  });
+  return reportQueue.recv(timeoutMs);
 }
 
 async function sendReportRaw(bytes, { expect = true, timeout = RECV_TIMEOUT_MS } = {}) {
@@ -187,6 +203,7 @@ export async function flashToBoard(device, bin, cb = {}) {
   const onStatus = cb.onStatus || (() => {});
   const onLog = cb.onLog || (() => {});
 
+  if (flashing) throw new Error("flash already in progress");
   resetFlashState();
   flashing = true;
 
@@ -222,6 +239,7 @@ export async function flashToBoard(device, bin, cb = {}) {
 
     const pages = splitPages(bin);
     for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+      if (!flashing) throw new Error("cancelled");
       const addr = pageIdx * PAGE_SIZE;
       const page = pages[pageIdx];
       await txrx(cmdErase(addr));
@@ -240,16 +258,21 @@ export async function flashToBoard(device, bin, cb = {}) {
 }
 
 export async function bootBoard(device) {
-  if (activeDevice !== device && device && !device.opened) {
-    await device.open();
+  const target = activeDevice || device;
+  activeDevice = target;
+  if (target && !target.opened) {
+    await target.open();
   }
   await txrx(cmdBoot()).catch(() => null);
 }
 
 export async function closeBoard(device) {
+  const board = activeDevice;
   resetFlashState();
-  if (device && device.opened) {
-    try { await device.close(); } catch { /* already gone */ }
+  for (const d of [device, board]) {
+    if (d && d.opened) {
+      try { await d.close(); } catch { /* already gone */ }
+    }
   }
 }
 
