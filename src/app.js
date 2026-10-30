@@ -1491,6 +1491,7 @@ document.getElementById("dlOptionAsm").addEventListener("click", () => {
 });
 
 // 14b. Flash to device (WebHID bootloader)
+const topFlashBtn = document.getElementById("topFlashBtn");
 const flashModal = document.getElementById("flashModal");
 const flashStatusEl = document.getElementById("flashStatus");
 const flashHintEl = document.getElementById("flashHint");
@@ -1545,6 +1546,8 @@ dlOptionFlash.addEventListener("click", (e) => {
 
 closeFlashModalBtn.addEventListener("click", closeFlashModal);
 cancelFlashModalBtn.addEventListener("click", closeFlashModal);
+
+topFlashBtn.addEventListener("click", openFlashModal);
 
 copyFlashLogBtn.addEventListener("click", async () => {
   try {
