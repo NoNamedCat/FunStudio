@@ -1641,6 +1641,7 @@
     <div class="tree-item" id="dlOptionHex"><i class="fa-solid fa-file-code" style="color: #519aba;"></i> <span data-i18n="dl_hex">Download Intel HEX (.HEX)</span></div>
     <div class="tree-item" id="dlOptionBin"><i class="fa-solid fa-file" style="color: #e37933;"></i> <span data-i18n="dl_bin">Download Raw Binary (.BIN)</span></div>
     <div class="tree-item" id="dlOptionAsm"><i class="fa-solid fa-file-lines" style="color: #ba8baf;"></i> <span data-i18n="dl_asm">Download Assembly (.S)</span></div>
+    <div class="tree-item" id="dlOptionFlash"><i class="fa-solid fa-bolt" style="color: #4ec9b0;"></i> <span data-i18n="dl_flash">Flash to device</span></div>
   </div>
 
   <!-- Modal: Create New Project -->
@@ -1704,6 +1705,36 @@
       <div class="modal-footer">
         <button class="btn-secondary" id="cancelNewFileModalBtn">Cancel</button>
         <button class="btn-action success" id="confirmCreateFileBtn">Add File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Flash to Device (WebHID bootloader) -->
+  <div class="modal-backdrop" id="flashModal" style="display: none;">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <span><i class="fa-solid fa-bolt" style="color: #4ec9b0; margin-right: 6px;"></i> <span data-i18n="flash_title">Flash CH32V003 (WebHID)</span></span>
+        <button class="icon-action-btn" id="closeFlashModalBtn"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" id="flashStatus">Idle</label>
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="flashHint"></label>
+        </div>
+        <div class="form-group">
+          <progress id="flashProg" value="0" max="100" style="width: 100%;"></progress>
+        </div>
+        <div class="form-group">
+          <pre id="flashLog" style="max-height: 120px; overflow-y: auto; font-size: 11px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; white-space: pre-wrap;"></pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="flashPairBtn"><i class="fa-solid fa-plug" style="margin-right: 6px;"></i> <span data-i18n="flash_pair">Connect device</span></button>
+        <button class="btn-action success" id="flashFlashBtn" disabled><i class="fa-solid fa-bolt" style="margin-right: 6px;"></i> <span data-i18n="flash_flash">Flash .bin</span></button>
+        <button class="btn-action" id="flashBootBtn" disabled><i class="fa-solid fa-power-off" style="margin-right: 6px;"></i> <span data-i18n="flash_boot">Boot application</span></button>
+        <button class="btn-secondary" id="cancelFlashModalBtn"><span data-i18n="flash_close">Close</span></button>
       </div>
     </div>
   </div>

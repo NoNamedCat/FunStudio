@@ -11,6 +11,9 @@ import {
   EXAMPLES_CATALOGUE,
 } from "./catalogue.js";
 import { ProjectManager } from "./projects.js";
+import {
+  pairDevice, flashToBoard, bootBoard, closeBoard, isFlashing,
+} from "./flasher/webhid.js";
 
 // State
 const projectManager = new ProjectManager();
@@ -1485,6 +1488,115 @@ document.getElementById("dlOptionAsm").addEventListener("click", () => {
   const curProj = projectManager.getActiveProject();
   triggerFileDownload(compiledArtifacts.asm, `${curProj.name}.s`, "text/plain");
   downloadModal.style.display = "none";
+});
+
+// 14b. Flash to device (WebHID bootloader)
+const flashModal = document.getElementById("flashModal");
+const flashStatusEl = document.getElementById("flashStatus");
+const flashHintEl = document.getElementById("flashHint");
+const flashProgEl = document.getElementById("flashProg");
+const flashLogEl = document.getElementById("flashLog");
+const flashPairBtn = document.getElementById("flashPairBtn");
+const flashFlashBtn = document.getElementById("flashFlashBtn");
+const flashBootBtn = document.getElementById("flashBootBtn");
+const closeFlashModalBtn = document.getElementById("closeFlashModalBtn");
+const cancelFlashModalBtn = document.getElementById("cancelFlashModalBtn");
+const dlOptionFlash = document.getElementById("dlOptionFlash");
+
+let flashBoard = null;
+
+function flashLogAppend(msg) {
+  flashLogEl.textContent += msg + "\n";
+  flashLogEl.scrollTop = flashLogEl.scrollHeight;
+}
+
+function openFlashModal() {
+  flashModal.style.display = "flex";
+  if (!compiledArtifacts || !compiledArtifacts.bin) {
+    flashStatusEl.textContent = t("flash_status_idle");
+    flashHintEl.textContent = t("flash_need_compile");
+    flashFlashBtn.disabled = true;
+    return;
+  }
+  flashHintEl.textContent = t("flash_hint_pair");
+}
+
+function closeFlashModal() {
+  if (flashBoard && isFlashing()) {
+    closeBoard(flashBoard).catch(() => {});
+    flashLogAppend(t("flash_error_closed"));
+  }
+  flashModal.style.display = "none";
+  flashProgEl.value = 0;
+  flashStatusEl.textContent = t("flash_status_idle");
+  flashHintEl.textContent = "";
+  flashFlashBtn.disabled = true;
+  flashBootBtn.disabled = true;
+}
+
+dlOptionFlash.addEventListener("click", (e) => {
+  e.stopPropagation();
+  downloadModal.style.display = "none";
+  openFlashModal();
+});
+
+closeFlashModalBtn.addEventListener("click", closeFlashModal);
+cancelFlashModalBtn.addEventListener("click", closeFlashModal);
+
+flashPairBtn.addEventListener("click", async () => {
+  try {
+    const dev = await pairDevice();
+    if (!dev) {
+      flashStatusEl.textContent = t("flash_error_no_device");
+      return;
+    }
+    flashBoard = dev;
+    flashHintEl.textContent = `USB ${dev.vendorId.toString(16).toUpperCase()}:${dev.productId.toString(16).toUpperCase()}`;
+    flashStatusEl.textContent = t("flash_status_idle");
+    flashFlashBtn.disabled = false;
+  } catch (err) {
+    flashStatusEl.textContent = t("flash_error_no_device");
+  }
+});
+
+flashFlashBtn.addEventListener("click", async () => {
+  if (!flashBoard || !compiledArtifacts || !compiledArtifacts.bin) return;
+  flashPairBtn.disabled = true;
+  flashFlashBtn.disabled = true;
+  flashBootBtn.disabled = true;
+  flashProgEl.value = 0;
+  flashHintEl.textContent = t("flash_hint_disconnect");
+  flashStatusEl.textContent = t("flash_status_flashing");
+  try {
+    await flashToBoard(flashBoard, compiledArtifacts.bin, {
+      onProgress: (pct) => { flashProgEl.value = pct; },
+      onStatus: (phase) => {
+        if (phase === "reconnect") flashHintEl.textContent = t("flash_hint_reconnect");
+        if (phase === "done") flashStatusEl.textContent = t("flash_status_done");
+      },
+      onLog: (msg) => flashLogAppend(msg),
+    });
+    flashBootBtn.disabled = false;
+  } catch (err) {
+    const msg = String(err && err.message || err);
+    if (msg.includes("timeout")) {
+      flashStatusEl.textContent = t("flash_error_timeout");
+    } else if (/not responding/i.test(msg)) {
+      flashStatusEl.textContent = t("flash_error_not_bootloader");
+    } else {
+      flashStatusEl.textContent = msg;
+    }
+  } finally {
+    flashPairBtn.disabled = false;
+    flashFlashBtn.disabled = false;
+  }
+});
+
+flashBootBtn.addEventListener("click", async () => {
+  if (!flashBoard) return;
+  flashBootBtn.disabled = true;
+  flashStatusEl.textContent = t("flash_status_booted");
+  await bootBoard(flashBoard).catch(() => {});
 });
 
 // 15. Initial Bootstrapping
