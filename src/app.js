@@ -1523,6 +1523,7 @@ function openFlashModal() {
     return;
   }
   flashHintEl.textContent = t("flash_hint_pair");
+  flashFlashBtn.disabled = !flashBoard;
 }
 
 function closeFlashModal() {

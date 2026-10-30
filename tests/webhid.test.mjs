@@ -87,3 +87,33 @@ import { flashToBoard } from "../src/flasher/webhid.js";
   assert.strictEqual(boardStub.opened, false, "bootloader handle must be closed after a failed flash");
   console.log("webhid: close-on-failure test passed");
 }
+// Board already in bootloader mode (permitted + connected): skip the disconnect phase
+{
+  const boardStub = {
+    opened: false,
+    vendorId: VENDOR_ID,
+    productId: 0xB003,
+    open: async () => { boardStub.opened = true; },
+    close: async () => { boardStub.opened = false; },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    sendFeatureReport: async () => { throw new Error("no b003 in node"); },
+  };
+  Object.defineProperty(globalThis, "navigator", {
+    value: { hid: { getDevices: async () => [boardStub] } },
+    configurable: true,
+  });
+  const statuses = [];
+  const t0 = Date.now();
+  let caught = null;
+  await flashToBoard(boardStub, new Uint8Array([1]), {
+    onStatus: (s) => statuses.push(s),
+    onLog: () => {},
+    onProgress: () => {},
+  }).catch((e) => { caught = e; });
+  const elapsed = Date.now() - t0;
+  assert.ok(caught, "flash must fail in Node (no B003 feature report)");
+  assert.ok(!statuses.includes("disconnect"), "must skip the disconnect phase when the board is already in bootloader mode (got: " + statuses.join(",") + ")");
+  assert.ok(elapsed < 2000, "must not wait 20 s for a disconnect (took " + elapsed + " ms)");
+  console.log("webhid: skip-disconnect-when-bootloader test passed");
+}

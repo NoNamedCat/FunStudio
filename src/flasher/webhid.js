@@ -438,10 +438,16 @@ export async function flashToBoard(device, bin, cb = {}) {
       try { await device.close(); } catch { /* already gone */ }
     }
 
-    // Phase 1: user disconnects the board (skip if it's already gone).
-    onStatus("disconnect");
-    const sameProfile = (d) => d.vendorId === VENDOR_ID && d.productId === device.productId;
-    await waitForPresence({ predicate: sameProfile, shouldBePresent: false });
+    // Phase 1: user disconnects the board — skip it when the board is
+    // already in bootloader mode (e.g. retrying right after a failed flash).
+    const present = await findDeviceByProfile((d) => d.vendorId === VENDOR_ID);
+    if (present && isBootloaderDevice(present)) {
+      onLog("board already in bootloader mode — skipping disconnect phase");
+    } else {
+      onStatus("disconnect");
+      const sameProfile = (d) => d.vendorId === VENDOR_ID && d.productId === device.productId;
+      await waitForPresence({ predicate: sameProfile, shouldBePresent: false });
+    }
 
     // Phase 2: board comes back in bootloader mode.
     onStatus("reconnect");
