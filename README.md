@@ -1,146 +1,188 @@
-# RISC-V Web GCC Compiler (WebAssembly)
+# FunStudio — Web IDE para WCH CH32 RISC-V y el SDK ch32fun
 
-Compilador C/C++ completo para microcontroladores **RISC-V** ejecutándose directamente en el navegador web mediante **WebAssembly** y la última versión de **GCC (GCC 15.2.0)** junto a **GNU Binutils**.
+IDE **100% client-side** que compila firmware baremetal **RISC-V** directamente en el navegador con la suite GNU real (**GCC 15.2.0** + **GNU Binutils 2.44**) compilada a **WebAssembly**. Especializado para la familia **WCH CH32** y el **SDK ch32fun** (ch32fun + extralibs + rv003usb). Sin servidores de compilación: todo ocurre en un Web Worker.
 
-Inspirado en la arquitectura desacoplada de `avr-gcc-wasm` y `pcbkit-io/toolchain`, este proyecto traslada la suite completa de compilación GNU bare-metal (`riscv32-unknown-elf`) al navegador sin necesidad de servidores de compilación remotos ni emuladores tipo QEMU.
+> Basado en la arquitectura desacoplada de `avr-gcc-wasm` y `pcbkit-io/toolchain`: cada componente de la cadena GNU se compila a WASM por separado y se orquesta secuencialmente en JS, porque en el navegador no existen `fork()`/`exec()` y el driver `riscv-none-elf-gcc` (que solo coordina procesos) no puede ejecutarse.
 
 ---
 
 ## 🏗️ Arquitectura del Sistema
 
-En los navegadores WebAssembly no existen las llamadas al sistema operativo POSIX `fork()` ni `exec()`, por lo que el ejecutable tradicional `riscv-none-elf-gcc` (que es solo un coordinador de procesos) no puede ejecutarse directamente.
-
-La solución consiste en compilar cada componente de la cadena GNU de forma independiente y coordinarlos secuencialmente a través de un **Web Worker** en JavaScript utilizando el sistema de archivos virtual en memoria (**MEMFS** de Emscripten):
+El **worker** (`src/compiler-worker.js`) es el conductor. Para cada herramienta instancia un módulo de Emscripten fresco (con su propio filesystem virtual **MEMFS**) y lo alimenta con el "mundo" necesario (cabeceras del SDK + fuentes + sysroot). Así, el mismo binario `.wasm` se reutiliza en cada compilación sin fugas de estado.
 
 ```
-                   Navegador / Web Worker (Aislado)
-  
-   [Código C/C++]
-         │
-         ▼
-  ┌──────────────┐     Genera ensamblador
-  │   cc1.wasm   │ ──────────────────────────┐
-  └──────────────┘                           ▼
-                                      ┌──────────────┐    Genera código objeto
-                                      │ riscv-as.wasm│ ──────────────────────────┐
-                                      └──────────────┘                           ▼
-                                                                          ┌──────────────┐
-  [Sysroot: libc.a, libgcc.a, riscv32-baremetal.ld] ─────────────────────►│ riscv-ld.wasm│
-                                                                          └──────────────┘
-                                                                                 │
-                                                              Genera binario ELF ▼
-                                                                        ┌────────────────────┐
-                                                                        │ riscv-objcopy.wasm │
-                                                                        └────────────────────┘
-                                                                                 │
-                                                                                 ▼
-                                                                 [firmware.hex / firmware.bin]
+                    Navegador / Web Worker (aislado del hilo de UI)
+
+  [Bundle de board: public/ch32fun/]              [toolchain release v0.1.0 (WASM)]
+   ├── headers.json   (árbol real del SDK)          ├── cc1.wasm         (front-end C, GCC 15.2.0)
+   ├── gcc-headers.json                             ├── riscv-as.wasm    (assembler)
+   └── sdk/  (ch32fun.c, ch32fun.ld, rv003usb.*)    ├── riscv-ld.wasm    (linker)
+        │                                           ├── riscv-objdump.wasm
+        ▼                                           ├── riscv-size.wasm
+   MEMFS:  /include/ch32fun/...  /include/extralibs/├── riscv-objcopy.wasm
+           /include/{sys,machine,ssp}/...           └── sysroot/ (libc.a, libgcc.a por multilib)
+        │
+        ▼
+   [proyecto: /main.c  /funconfig.h  /ch32fun.ld  /usb_config.h]
+        │
+        ▼
+   ┌──────────────┐  .s  ┌──────────────┐  .o  ┌──────────────┐
+   │   cc1.wasm   │─────►│ riscv-as.wasm│─────►│ (obj .o)     │
+   └──────────────┘       └──────────────┘       └──────────────┘  [main.o, ch32fun.o, rv003usb.o]
+                                                     │
+   [ch32fun.ld preprocesado con cc1 -E -P] ────────►│ riscv-ld.wasm  (+libc.a, +libgcc.a) ──► main.elf
+                                                     │
+        ┌────────────────────────────────────────────┤
+        ▼                ▼                ▼          ▼
+   riscv-objdump   riscv-size     riscv-objcopy   riscv-objcopy
+   (desensamblado)  (Flash/SRAM)   → main.hex     → main.bin
 ```
+
+Cada herramienta corre **en vivo**: no hay binarios precompilados ni objetos falsos. Todo `.o` se genera desde el código fuente del SDK y del usuario.
 
 ---
 
-## 🚀 Inicio Rápido
+## 🔩 El pipeline de compilación (cómo se conecta con el compilador)
 
-### 1. Iniciar la interfaz web
-El proyecto incluye un servidor HTTP nativo en Node.js configurado con las cabeceras requeridas (`Cross-Origin-Opener-Policy` y `Cross-Origin-Embedder-Policy`) para soportar la memoria dinámica de WebAssembly:
+### 1. El toolchain (qué es "el compilador")
 
-```bash
-npm run serve
+El toolchain **no vive en este repo**. Es el release pinado **`v0.1.0`** de [`riscv-wasm-toolchain`](https://github.com/NoNamedCat/riscv-wasm-toolchain) (ver `TOOLCHAIN_RELEASE` en `src/toolchain-loader.mjs`). `toolchain-loader.mjs`:
+
+1. Lo trae de `raw.githubusercontent.com` (que envía `Access-Control-Allow-Origin: *`; los assets de release de GitHub no).
+2. Lo descomprime y **parsea el `tar` (ustar) en un `Map<relPath, Uint8Array>`** en memoria.
+3. En el navegador, **cachea los bytes comprimidos en IndexedDB** por tag de release: las compilaciones siguientes no vuelven a descargarlo.
+
+El tar contiene: `cc1`/`riscv-as`/`riscv-ld`/`riscv-objdump`/`riscv-size`/`riscv-objcopy` (`.js`+`.wasm`), el `sysroot/` (newlib `libc.a` y `libgcc.a` por multilib) y `manifest.json`.
+
+### 2. El worker (el conductor)
+
+`compiler-worker.js` corre en un **Web Worker** (aisla la compilación del hilo de UI). `loadToolFactory()` ejecuta el JS de emscripten de cada herramienta y devuelve una factory; cada etapa instancia un módulo fresco (`noInitialRun`). Los mensajes entre worker y UI van por `postMessage` (logs, progress y resultado final).
+
+### 3. El filesystem virtual (el puente real)
+
+Antes de invocar cada herramienta, el worker "monta el mundo" en su MEMFS:
+
+- **`populateFSHeaders`** escribe `headers.json` en `/include/...` **conservando el árbol real** del SDK → `/include/ch32fun/ch32fun.h`, `/include/extralibs/ch32v003_GPIO_branchless.h`, `/include/sys/stdio.h`, etc. Escribe `gcc-headers.json` en `/opt/riscv-wasm/lib/gcc/riscv32-unknown-elf/15.2.0/include` (el `--prefix` exacto con que se compiló `cc1`), para que encuentre sus propios `stddef.h`/`stdarg.h`.
+- **`populateProjectFiles`** escribe los archivos del proyecto (`main.c`, `funconfig.h`, `ch32fun.ld`, `usb_config.h`) en la raíz de la MEMFS.
+- Las librerías del sysroot (`libc.a`, `libgcc.a`) se escriben en `/sysroot/...` **solo** en la etapa de enlazado.
+
+### 4. Las etapas
+
+1. **`cc1`** compila **`ch32fun.c`** (SDK: vectores de interrupción, `SystemInit`, `printf` por UART) → `.s`
+2. **`as`** lo ensambla → `ch32fun.o`
+   *(si el proyecto usa USB: `rv003usb.c` con cc1+as, y `rv003usb.S` con `cc1 -E` preprocesando y luego `as`)*
+3. **`cc1`** compila **`main.c`** (tu código) → `.s`
+4. **`as`** lo ensambla → `main.o`
+5. **`cc1 -E -P`** preprocesa **`ch32fun.ld`** (el script de enlazado usa `#if` sobre macros `TARGET_MCU*`) → `.ld` final; **`ld`** enlaza todos los objetos + `libc.a`/`libgcc.a` (el multilib elegido) → `main.elf`
+6. **`objdump`** (desensamblado), **`size`** (Flash/SRAM), **`objcopy`** (`.hex` + `.bin`)
+
+### 5. Las raíces de include
+
+`CH32FUN_INCLUDE_DIRS` (`src/compiler-worker.js`) es la traducción a wasm de los `-I` de `ch32fun.mk` upstream (`-I$(CH32FUN) -I$(CH32FUN)/../extralibs -I.`):
+
 ```
-Abre tu navegador en: **`http://localhost:3000`**
+-I.  -I/  -I/include/ch32fun  -I/include/extralibs  -I/include
+```
 
-### 2. Compilar firmware en el navegador
-1. Selecciona tu microcontrolador objetivo (ej. **ESP32-C3**, **RP2350 RISC-V**, **CH32V003** o **Genérico RV32IMC**).
-2. Escoge un ejemplo (Blink LED o UART Print + Math Benchmark).
-3. Haz clic en **"Compilar"**.
-4. Podrás ver en tiempo real:
-   - Los logs de cada paso del compilador.
-   - El código ensamblador RISC-V generado (`.s`).
-   - El archivo Intel HEX (`.hex`).
-   - Descargar los binarios listos para flashear (`.elf`, `.hex`, `.bin`).
+El orden importa: primero la carpeta del proyecto (un `funconfig.h` del proyecto gana), luego las raíces de librería, y por último el bundle plano/newlib. Al conservar el árbol real, un include relativo como `#include "../ch32fun/ch32fun.h"` (desde `extralibs/`) resuelve a `/include/ch32fun/ch32fun.h` — igual que en disco.
+
+### 6. Multilib = idéntico al gcc nativo
+
+`matchMultilib` (`src/multilib.js`) replica el algoritmo del driver `riscv32-unknown-elf-gcc`: **ABI exacta**, **xlen exacto**, **ISA de la multilib ⊆ ISA pedido**, y entre las candidatas gana la de **más extensiones** (empate lexicográfico). **Si ninguna encaja, falla** (sin fallback silencioso). De ese multilib se toman `libc.a` y `libgcc.a` del sysroot.
 
 ---
 
-## 🛠️ Compilación de los binarios WebAssembly (Build Pipeline)
+## 📦 El paquete de board (public/ch32fun/)
 
-El script `build-riscv-wasm.sh` (en el repo [`riscv-wasm-toolchain`](https://github.com/NoNamedCat/riscv-wasm-toolchain)) automatiza todo el proceso de construcción desde el código fuente oficial de GNU:
+Es lo que hace a FunStudio "de ch32fun". Nada de esto está en el toolchain genérico; se carga por separado:
 
-### Requisitos:
-- **Linux** (x86_64 o ARM64)
-- **Emscripten SDK (emsdk)** instalado (se autodetecta en `$HOME/emsdk`)
-- Herramientas base: `gcc`, `g++`, `make`, `curl`, `tar`, `xz-utils`
+| Archivo | Contenido |
+|---|---|
+| `headers.json` | **181 cabeceras con su árbol real**: `ch32fun/` (9), `extralibs/` (28), y newlib `sys/` (43), `machine/` (18), `ssp/` (7), `rpc/` (2) + top-level plano (`stdio.h`, `stdint.h`, `funconfig.h`, `rv003usb.h`, `cdc.h`, `tusb_types.h`, `tinyusb_hid.h`, …). |
+| `gcc-headers.json` | Cabeceras internas de GCC (`stddef.h`, `stdarg.h`, …) que `cc1` necesita en su `--prefix`. |
+| `sdk/ch32fun.c` | Fuente del SDK: vectores de interrupción, `SystemInit`, `printf` por UART. |
+| `sdk/ch32fun.ld` | Script de enlazado con `#if` sobre `TARGET_MCU_LD`/`MCU_PACKAGE`/`MEMORY_SPLIT` (se preprocesa con cc1). |
+| `sdk/rv003usb.c` + `rv003usb.S` | USB por software (TinyUSB-style), compilado solo si el proyecto lo usa. |
 
-### Ejecutar la construcción:
-```bash
-./build-riscv-wasm.sh
-```
-
-### ¿Qué hace el script?
-1. **Descarga oficial:** Descarga GCC 15.2.0, GNU Binutils 2.44, GMP 6.3.0, MPFR 4.2.1, MPC 1.3.1 y Newlib 4.5.0.
-2. **Build nativo:** Compila una versión bootstrap nativa de Binutils y GCC para generar las librerías del microcontrolador (`libc.a`, `libm.a`, `libgcc.a`, `crt0.o`).
-3. **Dependencias a WASM:** Compila GMP, MPFR y MPC a WebAssembly (`--host=wasm32`) con `emconfigure` y `emmake`.
-4. **Compilador a WASM:** Compila `cc1` y `cc1plus` (GCC 15.2.0) a WebAssembly exportando el sistema de archivos (`FS`) y la función `callMain`.
-5. **Binutils a WASM:** Compila `gas` (`as`), `ld` y `objcopy` a WebAssembly.
-6. **Empaquetado:** Empaqueta las herramientas `.wasm`, el sysroot y el `manifest.json` en un `riscv-wasm-toolchain.tar.gz` y publica un **release** en GitHub (`NoNamedCat/riscv-wasm-toolchain`).
-
-> **El toolchain NO vive en este repo.** En runtime, `src/toolchain-loader.mjs` descarga el release pinado (`TOOLCHAIN_RELEASE`, ver. actual **v0.3.0**), lo descomprime en memoria y el worker lo consume desde ese mapa (nada de `public/wasm-toolchain/` local).
->
-> El script de build anterior vive en el repo separado [`riscv-wasm-toolchain`](https://github.com/NoNamedCat/riscv-wasm-toolchain).
+**Archivos del proyecto** (los que ves en el editor): `main.c` (tu código), `funconfig.h` (config del SDK — hay un *default* en el bundle que el proyecto puede sobreescribir), `ch32fun.ld` (script de enlazado) y `usb_config.h` (solo con rv003usb).
 
 ---
 
-## 📦 Sysroot y selección multilib
+## 🎛️ Hardware (MCU) y config
 
-El enlazado es **idéntico al de un `riscv32-unknown-elf-gcc` real**: el worker no elige librerías a mano, sino que resuelve la multilib correcta desde el sysroot y enlaza contra su `libgcc.a` + `libc.a` (newlib).
+`getHardwareMcuConfig` resuelve, por MCU, un conjunto de `-D` (`TARGET_MCU`, `TARGET_MCU_LD`, `MCU_PACKAGE`, `TARGET_MCU_MEMORY_SPLIT`, …). Esos defines son los que **preprocesan `ch32fun.ld`** y eligen el bloque de memoria (FLASH/RAM) del script. El worker reconoce un superset de MCUs (CH32V002/003/004/005/006/007, CH32V103/V203/V307, CH32L103, CH32X03x, CH57x/58x/59x, CH32H41x); el catálogo de la UI expone perfiles listos: **CH32V003, CH32V006, CH32X035, CH32V103, CH32V203, CH32V307, CH32L103, CH582**, cada uno con su `arch`/`abi` (p. ej. `rv32ec`/`ilp32e` para V003, `rv32imafc`/`ilp32f` para V307).
 
-### Cómo se construye el sysroot
+---
 
-1. Una toolchain cruzada nativa (`riscv32-unknown-elf-gcc` 15.2.0 + Newlib 4.5.0) se configura con un *multilib generator*:
-   ```
-   --with-multilib-generator="rv32ec-ilp32e--;rv32imac-ilp32--;rv32imafc-ilp32f--"
-   ```
-2. `make all-target-libgcc` + `make install-target-libgcc` genera un `libgcc.a` por multilib.
-3. Newlib genera un `libc.a` por multilib.
-4. `build-riscv-wasm.sh` copia el árbol `lib/` preservando el layout multilib y emite `manifest.json` con la lista de ficheros.
+## 📚 Catálogo de ejemplos
 
-### Multilibs disponibles
+`src/catalogue.js` define la base de datos de hardware y **73 ejemplos** en **11 categorías** (GPIO, ADC/DMA, Timers/PWM, I2C/Displays, UART, SPI/Radios, USB por software, USB/PD, Interrupts, System/Clocks/Power). Cada ejemplo es `{ id, title, category, description, mcus[], code, funconfig }` y se carga como proyecto editable (abre `main.c` + su `funconfig.h`). La carpeta `examples/` contiene además algunos `.c`/`.ld` standalone (`blink.c`, `gpio_interrupt.c`, `uart_hello.c`, `riscv32-baremetal.ld`).
 
-| Multilib | ISA base | libc.a | libgcc.a |
-|---|---|---|---|
-| `.` (base, rv32imc/ilp32) | rv32imc | `lib/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/libgcc.a` |
-| `rv32ec/ilp32e` | rv32ec | `lib/rv32ec/ilp32e/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/rv32ec/ilp32e/libgcc.a` |
-| `rv32imac_zaamo_zalrsc/ilp32` | rv32imac | `lib/rv32imac_zaamo_zalrsc/ilp32/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/rv32imac_zaamo_zalrsc/ilp32/libgcc.a` |
-| `rv32imafc_zicsr_zaamo_zalrsc/ilp32f` | rv32imafc | `lib/rv32imafc_zicsr_zaamo_zalrsc/ilp32f/libc.a` | `lib/gcc/riscv32-unknown-elf/15.2.0/rv32imafc_zicsr_zaamo_zalrsc/ilp32f/libgcc.a` |
+---
 
-### Cómo se selecciona
+## 🖥️ UI
 
-El worker recibe `march`/`mabi` (p. ej. `rv32imac` / `ilp32`) y aplica el **algoritmo de matching de GCC**:
-
-1. La **ABI debe ser exacta** (p. ej. `ilp32`).
-2. El **xlen debe ser exacto** (32).
-3. El **ISA de la multilib debe ser subconjunto** del ISA pedido.
-4. Se elige la candidata con **más extensiones** (score); los empates se rompen lexicográficamente.
-5. Si **ninguna** multilib coincide, el compilador **falla** (no hay fallback silencioso).
-
-La librería exacta resultante se carga del sysroot y se pasa a `riscv-ld.wasm`, de modo que los símbolos (p. ej. `__udivdi3` de `libgcc.a` o `qsort` de `libc.a`) se resuelven de la multilib seleccionada, tal como en una máquina PC.
+- **i18n** (`src/i18n.js`): inglés, español, francés, alemán.
+- **Temas** (`src/themes.js`): 15 (VS Code Dark+, One Dark Pro, Dracula, Tokyo Night, Synthwave '84, Nord, Catppuccin Mocha/Latte, Gruvbox, Monokai Pro, Solarized Dark/Warm, VS Code Light+, GitHub Light, Nord Snow).
+- Editor multi-archivo con pestañas (`src/projects.js`); todos los archivos del proyecto se abren como tabs y `main.c` queda activo.
+- Salida en vivo: logs por etapa, ensamblado, desensamblado, mapa, Flash/SRAM y descarga de `.elf`/`.hex`/`.bin`.
 
 ---
 
 ## 📁 Estructura del Proyecto
 
 ```
-microcontroller-web-compiler/
-├── server.js                 # Servidor HTTP con cabeceras COOP/COEP para WASM
-├── index.html                # Interfaz web del compilador / IDE
-├── package.json              # Configuración y scripts npm
+Fun_Studio/
+├── server.js                 # Servidor HTTP con cabeceras COOP/COEP para WASM (puerto 3000)
+├── index.html                # Interfaz web (IDE)
+├── package.json              # Scripts npm (dev/build/preview/serve)
 ├── src/
-│   ├── app.js                # Lógica del frontend y gestión de descargas
-│   ├── toolchain-loader.mjs  # Descarga y descomprime el release del toolchain en memoria
-│   └── compiler-worker.js    # Web Worker que encadena cc1 -> as -> ld -> objcopy
-├── examples/
-│   ├── blink.c               # Ejemplo de parpadeo de LED baremetal
-│   └── uart_hello.c          # Ejemplo de UART y benchmark matemático en RISC-V
-└── public/
-    └── ch32fun/              # Bundle local del consumidor: board/SDK (ch32fun.*, rv003usb.*)
-                              #   + include bundles (headers.json, gcc-headers.json)
+│   ├── app.js                # Controlador del frontend, worker, pestañas, descargas
+│   ├── compiler-worker.js    # Web Worker que encadena cc1 → as → ld → objdump/size/objcopy
+│   ├── toolchain-loader.mjs  # Descarga el release del toolchain y lo cachea (IndexedDB)
+│   ├── multilib.js           # Selección de multilib (algoritmo del driver gcc)
+│   ├── catalogue.js          # Base de hardware + catálogo de ejemplos + funconfig/usb/ld
+│   ├── projects.js           # Gestión de proyectos multi-archivo
+│   ├── i18n.js               # Traducciones (en/es/fr/de)
+│   ├── themes.js             # Temas de editor
+│   └── vendor/fflate.mjs     # gunzip del toolchain (vendorizado)
+├── examples/                 # .c/.ld standalone (blink, gpio_interrupt, uart_hello, baremetal.ld)
+├── public/
+│   └── ch32fun/              # Paquete de board: headers.json (árbol real), gcc-headers.json, sdk/
+├── tests/                    # compile-harness.mjs (E2E), multilib.test.mjs, toolchain-loader.test.mjs
+└── docs/                     # Diseño y planes del toolchain
 ```
+
+---
+
+## 🚀 Inicio rápido
+
+```bash
+npm install
+npm run serve        # servidor Node con cabeceras COOP/COEP → http://localhost:3000
+```
+
+> `COOP`/`COEP` (`Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`) son obligatorias para la memoria dinámica de WebAssembly y el cross-origin isolation.
+
+1. Elige el MCU (p. ej. **CH32V003**).
+2. Elige un ejemplo del catálogo.
+3. Pulsa **Compilar** (`Ctrl+Enter`).
+4. Revisa los logs por etapa, el ensamblado/desensamblado y descarga `.elf`/`.hex`/`.bin`.
+
+---
+
+## ✅ Tests
+
+```bash
+node tests/compile-harness.mjs   # E2E en Node: importa compiler-worker.js y usa el mismo sysroot/worker
+node tests/multilib.test.mjs
+node tests/toolchain-loader.test.mjs
+```
+
+El harness compila en Node los casos representativos (blink, GPIO branchless, USB CDC, …) validando que los `.o` se generen y el binario quede correcto — la misma vía que el navegador.
+
+---
+
+## 🛠️ Build Pipeline del toolchain (repo separado)
+
+El toolchain **no se construye aquí**. El script `build-riscv-wasm.sh` en [`riscv-wasm-toolchain`](https://github.com/NoNamedCat/riscv-wasm-toolchain) automatiza: descarga GCC 15.2.0 + Binutils 2.44 + GMP/MPFR/MPC + Newlib, compila una toolchain cruzada nativa (para generar `libc.a`/`libm.a`/`libgcc.a`/`crt0.o` con su *multilib generator*), compila cada herramienta a WASM (`--host=wasm32` con emsdk), y publica un **release** (`riscv-wasm-toolchain.tar.gz`). Este repo solo lo **consume** en runtime.
