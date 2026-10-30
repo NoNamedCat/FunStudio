@@ -5,7 +5,7 @@
 //
 // Usage: node tests/compile-harness.mjs  (run from the repo root)
 
-import { MCU_PROFILES, EXAMPLES_CATALOGUE } from "../src/catalogue.js";
+import { MCU_PROFILES, EXAMPLES_CATALOGUE, FUNCONFIG_H, CH32FUN_LD } from "../src/catalogue.js";
 
 const messages = [];
 let pendingResolve = null;
@@ -75,6 +75,17 @@ int main()
 }
 `;
 
+// USB example: its main.c pulls in ch32v003_GPIO_branchless.h, which does a
+// relative `#include "../ch32fun/ch32fun.h"` — exercises the sibling-layout fix.
+const usbEx = EXAMPLES_CATALOGUE.find((x) => x.id === "rv003usb_cdc.c");
+if (!usbEx) throw new Error("rv003usb_cdc.c example missing from catalogue");
+const usbFiles = {
+  "main.c": usbEx.code,
+  "funconfig.h": usbEx.funconfig || FUNCONFIG_H,
+  "ch32fun.ld": CH32FUN_LD,
+};
+if (usbEx.extraFiles) Object.assign(usbFiles, usbEx.extraFiles);
+
 const CASES = [
   {
     name: "CH32V003 blink (rv32ec/ilp32e)",
@@ -121,6 +132,16 @@ const CASES = [
     expectMultilib: "rv32imac_zaamo_zalrsc/ilp32",
     expectMapContains: "/sysroot/lib/rv32imac_zaamo_zalrsc/ilp32/libc.a",
   },
+  {
+    name: "CH32V003 rv003usb CDC (branchless header ../ch32fun/ch32fun.h)",
+    mcu: "ch32v003",
+    arch: "rv32ec",
+    abi: "ilp32e",
+    code: usbEx.code,
+    files: usbFiles,
+    expectMultilib: "rv32ec/ilp32e",
+    expectMapContains: null,
+  },
 ];
 
 function assertElf(name, elf) {
@@ -148,14 +169,14 @@ for (const c of CASES) {
   });
   self.onmessage({
     data: {
-      code: c.code,
-      files: { "main.c": c.code },
-      mcu: c.mcu,
-      arch: c.arch,
-      abi: c.abi,
-      optLevel: "-Os",
-      target: "riscv32-unknown-elf",
-      linkerScript: null,
+    code: c.code,
+    files: c.files || { "main.c": c.code },
+    mcu: c.mcu,
+    arch: c.arch,
+    abi: c.abi,
+    optLevel: "-Os",
+    target: "riscv32-unknown-elf",
+    linkerScript: c.files ? c.files["ch32fun.ld"] || null : null,
     },
   });
   const result = await replyPromise;

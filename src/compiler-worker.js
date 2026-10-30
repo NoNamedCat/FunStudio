@@ -236,6 +236,15 @@ function populateFSHeaders(mod) {
     }
   }
 
+  // Some SDK headers (e.g. ch32v003_GPIO_branchless.h) are placed flat under
+  // /include/ but use a relative include that assumes the real ch32fun layout,
+  // where ch32fun.h lives in a sibling ch32fun/ dir: `#include "../ch32fun/ch32fun.h"`.
+  // That resolves to /ch32fun/ch32fun.h, so expose ch32fun.h at that path too.
+  if (cachedHeaders && cachedHeaders["ch32fun.h"] !== undefined) {
+    try { mod.FS.mkdir("/ch32fun"); } catch (_) {}
+    try { mod.FS.writeFile("/ch32fun/ch32fun.h", cachedHeaders["ch32fun.h"]); } catch (_) {}
+  }
+
   if (cachedGccHeaders) {
     // Matches the release cc1 GCC_INSTALL_DIR built with --prefix=/opt/riscv-wasm.
     const gccIncDir = "/opt/riscv-wasm/lib/gcc/riscv32-unknown-elf/15.2.0/include";
