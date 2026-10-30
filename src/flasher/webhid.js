@@ -221,6 +221,7 @@ export async function flashToBoard(device, bin, cb = {}) {
     // Phase 2: board comes back in bootloader mode.
     onStatus("reconnect");
     const board = await waitForPresence({ predicate: isBootloaderDevice, shouldBePresent: true });
+    onLog("board connected: VID=0x" + board.vendorId.toString(16).toUpperCase() + " PID=0x" + board.productId.toString(16).toUpperCase());
 
     // The bootloader window is short (~7.5 s): open and flash immediately.
     activeDevice = board;
@@ -230,9 +231,11 @@ export async function flashToBoard(device, bin, cb = {}) {
     activeDevice.addEventListener("inputreport", onInputReport);
     inputReportDevice = activeDevice;
 
-    const pong = await txrx(cmdPing()).catch(() => null);
-    if (pong) onLog("PING ok");
-    const info = await txrx(cmdInfo()).catch(() => null);
+    const hex = (u8) => Array.from(u8, (b) => b.toString(16).padStart(2, "0")).join(" ");
+    const pong = await txrx(cmdPing()).catch((e) => { onLog("PING failed: " + (e && e.message)); return null; });
+    if (pong) onLog("PING ok: " + hex(pong));
+    const info = await txrx(cmdInfo()).catch((e) => { onLog("INFO failed: " + (e && e.message)); return null; });
+    if (info) onLog("INFO: " + hex(info));
     if (pong === null && info === null) {
       throw new Error("Bootloader not responding — is the board in bootloader mode?");
     }

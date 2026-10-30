@@ -1513,6 +1513,7 @@ function flashLogAppend(msg) {
 
 function openFlashModal() {
   flashModal.style.display = "flex";
+  flashLogEl.textContent = "";
   flashStatusEl.textContent = t("flash_status_idle");
   if (!compiledArtifacts || !compiledArtifacts.bin) {
     flashHintEl.textContent = t("flash_need_compile");
@@ -1567,6 +1568,7 @@ flashFlashBtn.addEventListener("click", async () => {
   flashBootBtn.disabled = true;
   flashProgEl.value = 0;
   flashPhase = "idle";
+  flashLogAppend("paired: USB " + flashBoard.vendorId.toString(16).toUpperCase() + ":" + flashBoard.productId.toString(16).toUpperCase());
   flashHintEl.textContent = t("flash_hint_disconnect");
   flashStatusEl.textContent = t("flash_status_flashing");
   try {
@@ -1574,6 +1576,7 @@ flashFlashBtn.addEventListener("click", async () => {
       onProgress: (pct) => { flashProgEl.value = pct; },
       onStatus: (phase) => {
         flashPhase = phase;
+        flashLogAppend("phase: " + phase);
         if (phase === "reconnect") flashHintEl.textContent = t("flash_hint_reconnect");
         if (phase === "done") flashStatusEl.textContent = t("flash_status_done");
       },
@@ -1582,6 +1585,7 @@ flashFlashBtn.addEventListener("click", async () => {
     flashBootBtn.disabled = false;
   } catch (err) {
     const msg = String(err && err.message || err);
+    flashLogAppend("ERROR: " + msg);
     if (/cancelled/i.test(msg)) {
       flashStatusEl.textContent = t("flash_error_closed");
     } else if (msg.includes("timeout")) {
