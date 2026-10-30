@@ -50,3 +50,14 @@ const got = await Promise.race([
 ]);
 assert.deepStrictEqual([...got], [7, 8, 9]);
 console.log("webhid: queue tests passed");
+// B003Fun op builder (pure): 128B feature-report op with blob + LE u32 args
+import { createOp, opWriteU32, opWriteArb } from "../src/flasher/webhid.js";
+const op = createOp();
+assert.strictEqual(op.buffer[0], 0xaa, "op starts with report id 0xaa");
+assert.strictEqual(op.commandplace, 4, "commandplace starts at 4");
+opWriteArb(op, new Uint8Array([1, 2, 3, 4, 5]));
+opWriteU32(op, 0x40022010);
+assert.deepStrictEqual([...op.buffer.slice(4, 9)], [1, 2, 3, 4, 5], "blob at commandplace");
+assert.deepStrictEqual([...op.buffer.slice(9, 13)], [0x10, 0x20, 0x02, 0x40], "u32 LE at commandplace");
+assert.strictEqual(op.commandplace, 13, "commandplace advanced by 9");
+console.log("webhid: op builder tests passed");

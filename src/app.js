@@ -1499,6 +1499,7 @@ const flashLogEl = document.getElementById("flashLog");
 const flashPairBtn = document.getElementById("flashPairBtn");
 const flashFlashBtn = document.getElementById("flashFlashBtn");
 const flashBootBtn = document.getElementById("flashBootBtn");
+const copyFlashLogBtn = document.getElementById("copyFlashLogBtn");
 const closeFlashModalBtn = document.getElementById("closeFlashModalBtn");
 const cancelFlashModalBtn = document.getElementById("cancelFlashModalBtn");
 const dlOptionFlash = document.getElementById("dlOptionFlash");
@@ -1544,6 +1545,14 @@ dlOptionFlash.addEventListener("click", (e) => {
 
 closeFlashModalBtn.addEventListener("click", closeFlashModal);
 cancelFlashModalBtn.addEventListener("click", closeFlashModal);
+
+copyFlashLogBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(flashLogEl.textContent);
+  } catch (err) {
+    flashLogAppend("(clipboard blocked: " + (err && err.message) + ")");
+  }
+});
 
 flashPairBtn.addEventListener("click", async () => {
   try {
@@ -1605,7 +1614,7 @@ flashBootBtn.addEventListener("click", async () => {
   if (!flashBoard) return;
   flashBootBtn.disabled = true;
   flashStatusEl.textContent = t("flash_status_booted");
-  await bootBoard(flashBoard).catch(() => {});
+  await bootBoard(flashBoard, (m) => flashLogAppend(m)).catch(() => {});
 });
 
 // 15. Initial Bootstrapping
