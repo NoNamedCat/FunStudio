@@ -113,6 +113,7 @@ export const TRANSLATIONS = {
     flash_error_timeout: "Bootloader timeout: the board left bootloader mode. Run the flash again.",
     flash_error_not_bootloader: "The device did not answer in bootloader mode. Re-run after disconnecting/reconnecting.",
     flash_error_closed: "Flash cancelled (modal closed).",
+    flash_error_retry: "Flash failed. The board reboots into the app after about 10 s — then click Flash again.",
   },
 
   es: {
@@ -226,6 +227,7 @@ export const TRANSLATIONS = {
     flash_error_timeout: "Timeout del bootloader: la placa salió del modo bootloader. Vuelve a ejecutar el flash.",
     flash_error_not_bootloader: "El dispositivo no respondió en modo bootloader. Reintenta tras desconectar/reconectar.",
     flash_error_closed: "Flash cancelado (se cerró el modal).",
+    flash_error_retry: "Falló el flash. La placa vuelve a la app en unos 10 s — luego vuelve a pulsar Flash.",
   },
 
   fr: {
@@ -331,6 +333,7 @@ export const TRANSLATIONS = {
     flash_error_timeout: "Timeout du bootloader : la carte a quitté le mode bootloader. Relancez le flash.",
     flash_error_not_bootloader: "Le dispositif ne répond pas en mode bootloader. Relancez après débranchement/rebranchement.",
     flash_error_closed: "Flash annulé (fenêtre fermée).",
+    flash_error_retry: "Échec du flash. La carte redémarre en application après ~10 s — relancez Flash ensuite.",
   },
 
   de: {
@@ -436,6 +439,7 @@ export const TRANSLATIONS = {
     flash_error_timeout: "Bootloader-Timeout: Die Platine verließ den Bootloader-Modus. Starten Sie den Flash neu.",
     flash_error_not_bootloader: "Das Gerät antwortet nicht im Bootloader-Modus. Neu ausführen nach Trennen/Erneut Verbinden.",
     flash_error_closed: "Flash abgebrochen (Fenster geschlossen).",
+    flash_error_retry: "Flash fehlgeschlagen. Die Platine kehrt nach ~10 s zur App zurück — dann erneut Flash starten.",
   },
 };
 

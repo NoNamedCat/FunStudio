@@ -1526,10 +1526,9 @@ function openFlashModal() {
 }
 
 function closeFlashModal() {
-  if (flashBoard && isFlashing()) {
-    closeBoard(flashBoard).catch(() => {});
-    flashLogAppend(t("flash_error_closed"));
-  }
+  const wasFlashing = flashBoard && isFlashing();
+  if (flashBoard) closeBoard(flashBoard).catch(() => {});
+  if (wasFlashing) flashLogAppend(t("flash_error_closed"));
   flashModal.style.display = "none";
   flashProgEl.value = 0;
   flashStatusEl.textContent = t("flash_status_idle");
@@ -1607,6 +1606,7 @@ flashFlashBtn.addEventListener("click", async () => {
     } else {
       flashStatusEl.textContent = msg;
     }
+    flashHintEl.textContent = t("flash_error_retry");
   } finally {
     flashPairBtn.disabled = false;
     flashFlashBtn.disabled = false;

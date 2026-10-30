@@ -486,7 +486,13 @@ export async function flashToBoard(device, bin, cb = {}) {
       onProgress(Math.round(((pageIdx + 1) / pages.length) * 100));
     }
     onStatus("done");
-    return;
+  } catch (err) {
+    // Release the USB handle on failure so a retry works without reloading.
+    if (activeDevice && activeDevice.opened) {
+      try { await activeDevice.close(); } catch { /* already gone */ }
+    }
+    resetFlashState();
+    throw err;
   } finally {
     flashing = false;
   }

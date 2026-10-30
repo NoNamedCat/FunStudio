@@ -61,3 +61,29 @@ assert.deepStrictEqual([...op.buffer.slice(4, 9)], [1, 2, 3, 4, 5], "blob at com
 assert.deepStrictEqual([...op.buffer.slice(9, 13)], [0x10, 0x20, 0x02, 0x40], "u32 LE at commandplace");
 assert.strictEqual(op.commandplace, 13, "commandplace advanced by 9");
 console.log("webhid: op builder tests passed");
+// A failed flash must release the bootloader handle (retry without page reload)
+import { flashToBoard } from "../src/flasher/webhid.js";
+{
+  const boardStub = {
+    opened: false,
+    vendorId: VENDOR_ID,
+    productId: 0xB005,
+    open: async () => { boardStub.opened = true; },
+    close: async () => { boardStub.opened = false; },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    sendReport: async () => { throw new Error("usb down"); },
+  };
+  const appDev = { opened: false, vendorId: VENDOR_ID, productId: 0xC003, close: async () => {} };
+  Object.defineProperty(globalThis, "navigator", {
+    value: { hid: { getDevices: async () => [boardStub] } },
+    configurable: true,
+  });
+  let caught = null;
+  await flashToBoard(appDev, new Uint8Array([1]), {
+    onStatus: () => {}, onLog: () => {}, onProgress: () => {},
+  }).catch((e) => { caught = e; });
+  assert.ok(caught && /not responding/i.test(caught.message), "flash must fail (PONG/INFO unreachable)");
+  assert.strictEqual(boardStub.opened, false, "bootloader handle must be closed after a failed flash");
+  console.log("webhid: close-on-failure test passed");
+}
