@@ -117,3 +117,98 @@ import { flashToBoard } from "../src/flasher/webhid.js";
   assert.ok(elapsed < 2000, "must not wait 20 s for a disconnect (took " + elapsed + " ms)");
   console.log("webhid: skip-disconnect-when-bootloader test passed");
 }
+
+// ===== Fix 1: a hanging WebHID call must not leave flashToBoard pending =====
+import { pairDevice, closeBoard } from "../src/flasher/webhid.js";
+{
+  const hangDev = {
+    opened: false,
+    vendorId: VENDOR_ID,
+    productId: 0xB003,
+    open: async () => { hangDev.opened = true; },
+    close: async () => { hangDev.opened = false; },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    sendFeatureReport: () => new Promise(() => {}), // never settles (unplug mid-call)
+    receiveFeatureReport: () => new Promise(() => {}),
+  };
+  Object.defineProperty(globalThis, "navigator", {
+    value: { hid: { getDevices: async () => [hangDev] } },
+    configurable: true,
+  });
+  const t0 = Date.now();
+  const race = await Promise.race([
+    flashToBoard(hangDev, new Uint8Array([1]), {
+      onStatus: () => {}, onLog: () => {}, onProgress: () => {},
+    }).then(
+      () => ({ settled: true, threw: false }),
+      (e) => ({ settled: true, threw: true, msg: e && e.message }),
+    ),
+    new Promise((res) => setTimeout(() => res({ settled: false }), 8000)),
+  ]);
+  const elapsed = Date.now() - t0;
+  assert.ok(race.settled, "flashToBoard must settle when a WebHID call hangs (took >8000 ms)");
+  assert.ok(race.threw, "flashToBoard must reject when the board dies mid-flash");
+  assert.ok(elapsed < 8000, "must settle in bounded time (took " + elapsed + " ms)");
+  console.log("webhid: hanging-device timeout test passed (" + elapsed + " ms)");
+}
+
+// ===== Fix 2: pairDevice must open the picker so a different device can be chosen =====
+{
+  const bootA = { vendorId: VENDOR_ID, productId: 0xB003, opened: true };
+  const otherDev = { vendorId: VENDOR_ID, productId: 0xC003, opened: false };
+  let requestDeviceCalled = false;
+  Object.defineProperty(globalThis, "navigator", {
+    value: {
+      hid: {
+        getDevices: async () => [bootA], // a permitted bootloader is present
+        requestDevice: async () => { requestDeviceCalled = true; return [otherDev]; },
+      },
+    },
+    configurable: true,
+  });
+  const picked = await pairDevice();
+  assert.ok(requestDeviceCalled, "pairDevice must open the device picker (requestDevice)");
+  assert.strictEqual(picked, otherDev, "pairDevice must return the device the user picked");
+  console.log("webhid: pairDevice-picker test passed");
+}
+
+// ===== Fix 4: a stale (cancelled) flash must not corrupt a new flash's state =====
+import { isFlashing } from "../src/flasher/webhid.js";
+{
+  const hangDev = {
+    opened: false,
+    vendorId: VENDOR_ID,
+    productId: 0xB003,
+    open: async () => { hangDev.opened = true; },
+    close: async () => { hangDev.opened = false; },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    sendFeatureReport: () => new Promise(() => {}), // never settles
+    receiveFeatureReport: () => new Promise(() => {}),
+  };
+  Object.defineProperty(globalThis, "navigator", {
+    value: { hid: { getDevices: async () => [hangDev] } },
+    configurable: true,
+  });
+  // 1) flash A starts and hangs (board dies mid-flash).
+  const staleFlash = flashToBoard(hangDev, new Uint8Array([1]), {
+    onStatus: () => {}, onLog: () => {}, onProgress: () => {},
+  }).catch((e) => e);
+  await new Promise((r) => setTimeout(r, 50));
+  // 2) user closes the modal mid-flash -> state reset (generation bump).
+  await closeBoard(hangDev);
+  // 3) a NEW flash starts on the same dead device.
+  const newFlash = flashToBoard(hangDev, new Uint8Array([1]), {
+    onStatus: () => {}, onLog: () => {}, onProgress: () => {},
+  }).catch((e) => e);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.ok(isFlashing(), "new flash must be in progress");
+  // 4) the stale flash settles (its hung call times out); it must NOT
+  //    reset the state of the new, still-pending flash.
+  await staleFlash;
+  assert.ok(isFlashing(), "stale flash must not clear the new flash's state (flashing flag)");
+  const newResult = await newFlash;
+  assert.ok(newResult, "new flash must have rejected on its own (board dead)");
+  console.log("webhid: stale-flash isolation test passed");
+}

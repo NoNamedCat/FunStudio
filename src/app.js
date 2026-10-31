@@ -1517,6 +1517,7 @@ function openFlashModal() {
   flashModal.style.display = "flex";
   flashLogEl.textContent = "";
   flashStatusEl.textContent = t("flash_status_idle");
+  flashPairBtn.disabled = false;
   if (!compiledArtifacts || !compiledArtifacts.bin) {
     flashHintEl.textContent = t("flash_need_compile");
     flashFlashBtn.disabled = true;
@@ -1534,6 +1535,7 @@ function closeFlashModal() {
   flashProgEl.value = 0;
   flashStatusEl.textContent = t("flash_status_idle");
   flashHintEl.textContent = "";
+  flashPairBtn.disabled = false;
   flashFlashBtn.disabled = true;
   flashBootBtn.disabled = true;
 }

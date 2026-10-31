@@ -145,12 +145,29 @@ const B003_BLOBS = {
     0xc5,0xfe,0xc1,0x66,0x93,0x86,0x06,0x04,0xd4,0xc3,0xfd,0x56,0x14,0xc1,0x82,0x80]),
 };
 
+const DEVICE_OP_TIMEOUT_MS = 2000;
+
+// A WebHID device call that never settles (e.g. the board is unplugged
+// mid-call and the browser leaves the promise pending) would hang the whole
+// flash and leave the UI stuck. Race every device call against a timeout so
+// flashToBoard always settles.
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout: " + label)), ms);
+    Promise.resolve(promise).then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
 let reportQueue = createReportQueue();
 let activeDevice = null;
 let inputReportDevice = null;
 let outReportLen = DEFAULT_REPORT_LEN;
 let flashing = false;
 let b003Unlocked = false;
+let flashGeneration = 0;
 
 function isBootloaderDevice(hidDevice) {
   if (!hidDevice) return false;
@@ -166,9 +183,9 @@ async function findDeviceByProfile(predicate) {
 }
 
 export async function pairDevice() {
-  const permitted = await findDeviceByProfile(isBootloaderDevice);
-  if (permitted) return permitted;
   if (!("hid" in navigator)) return null;
+  // Always open the picker: the user must be able to choose a different
+  // device, not be silently handed the first already-permitted one.
   const devices = await navigator.hid.requestDevice({ filters: [{ vendorId: VENDOR_ID }] });
   return devices && devices.length ? devices[0] : null;
 }
@@ -199,6 +216,7 @@ function resetFlashState() {
   activeDevice = null;
   flashing = false;
   b003Unlocked = false;
+  flashGeneration++;
 }
 
 function recv(timeoutMs = RECV_TIMEOUT_MS) {
@@ -210,7 +228,7 @@ async function sendReportRaw(bytes, { expect = true, timeout = RECV_TIMEOUT_MS }
   const buf = new Uint8Array(outReportLen);
   buf.fill(0);
   buf.set(raw.subarray(0, Math.min(raw.length, outReportLen)));
-  await activeDevice.sendReport(REPORT_ID, buf);
+  await withTimeout(activeDevice.sendReport(REPORT_ID, buf), DEVICE_OP_TIMEOUT_MS, "sendReport");
   if (!expect) return null;
   return await recv(timeout);
 }
@@ -258,12 +276,12 @@ async function commitOpFeature(op, onLog, { noGetReport = false } = {}) {
   const dv = new DataView(op.buffer.buffer);
   dv.setUint32(124, 0x1234abcd, true);
   op.buffer[0] = 0xaa;
-  await activeDevice.sendFeatureReport(0xaa, op.buffer.subarray(1));
+  await withTimeout(activeDevice.sendFeatureReport(0xaa, op.buffer.subarray(1)), DEVICE_OP_TIMEOUT_MS, "sendFeatureReport");
   if (noGetReport) return null;
   for (let t = 0; t < 60; t++) {
     await new Promise((r) => setTimeout(r, t ? 10 : 20));
     try {
-      const view = await activeDevice.receiveFeatureReport(0xaa);
+      const view = await withTimeout(activeDevice.receiveFeatureReport(0xaa), RECV_TIMEOUT_MS, "receiveFeatureReport");
       const raw = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
       const statusByte = raw.length ? raw[0] : 0;
       if (t === 0) {
@@ -431,11 +449,12 @@ export async function flashToBoard(device, bin, cb = {}) {
   if (flashing) throw new Error("flash already in progress");
   resetFlashState();
   flashing = true;
+  const myGen = flashGeneration;
 
   try {
     // Close any open handle so the user can unplug.
     if (device && device.opened) {
-      try { await device.close(); } catch { /* already gone */ }
+      try { await withTimeout(device.close(), DEVICE_OP_TIMEOUT_MS, "close"); } catch { /* already gone */ }
     }
 
     // Phase 1: user disconnects the board — skip it when the board is
@@ -457,7 +476,7 @@ export async function flashToBoard(device, bin, cb = {}) {
     // The bootloader window is short (~7.5 s): open and flash immediately.
     activeDevice = board;
     if (!activeDevice.opened) {
-      await activeDevice.open();
+      await withTimeout(activeDevice.open(), DEVICE_OP_TIMEOUT_MS, "open");
     }
     activeDevice.addEventListener("inputreport", onInputReport);
     inputReportDevice = activeDevice;
@@ -493,14 +512,18 @@ export async function flashToBoard(device, bin, cb = {}) {
     }
     onStatus("done");
   } catch (err) {
-    // Release the USB handle on failure so a retry works without reloading.
-    if (activeDevice && activeDevice.opened) {
-      try { await activeDevice.close(); } catch { /* already gone */ }
+    // A stale flash (its modal was closed / a new flash started) must not
+    // touch the shared state of the current flash.
+    if (myGen === flashGeneration) {
+      // Release the USB handle on failure so a retry works without reloading.
+      if (activeDevice && activeDevice.opened) {
+        try { await withTimeout(activeDevice.close(), DEVICE_OP_TIMEOUT_MS, "close"); } catch { /* already gone */ }
+      }
+      resetFlashState();
     }
-    resetFlashState();
     throw err;
   } finally {
-    flashing = false;
+    if (myGen === flashGeneration) flashing = false;
   }
 }
 
@@ -508,7 +531,7 @@ export async function bootBoard(device, onLog = () => {}) {
   const target = activeDevice || device;
   activeDevice = target;
   if (target && !target.opened) {
-    await target.open();
+    await withTimeout(target.open(), DEVICE_OP_TIMEOUT_MS, "open");
   }
   if (target && target.productId === PID_B003FUN) {
     onLog("B003Fun: unplug/replug the board to boot the application.");
@@ -522,7 +545,7 @@ export async function closeBoard(device) {
   resetFlashState();
   for (const d of [device, board]) {
     if (d && d.opened) {
-      try { await d.close(); } catch { /* already gone */ }
+      try { await withTimeout(d.close(), DEVICE_OP_TIMEOUT_MS, "close"); } catch { /* already gone */ }
     }
   }
 }
